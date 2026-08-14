@@ -36,7 +36,7 @@ function TeacherSignup() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="page-enter min-h-screen bg-slate-950 text-white">
 
       {/* Background glow */}
       <div className="pointer-events-none fixed left-1/4 top-10 h-80 w-80 rounded-full bg-blue-600/10 blur-3xl" />
@@ -51,33 +51,33 @@ function TeacherSignup() {
 
           <Link
             to="/"
-            className="mb-10 flex items-center justify-center gap-3"
+            className="group mb-10 flex items-center justify-center gap-3"
           >
-            <div className="flex size-10 items-center justify-center">
+            <div className="orbit-ring flex size-10 items-center justify-center">
               <img
                 src="/logo.png"
                 alt="StudySphere"
-                className="size-10 object-contain"
+                className="size-10 object-contain transition-transform duration-500 group-hover:scale-110"
               />
             </div>
 
-            <span className="text-2xl font-bold">
-              Study<span className="text-blue-500">Sphere</span>
+            <span className="text-2xl font-bold" style={{ fontFamily: "var(--font-display)" }}>
+              Study<span className="text-gradient">Sphere</span>
             </span>
           </Link>
 
 
           {/* Signup Card */}
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-2xl backdrop-blur-xl md:p-8">
+          <div className="glass-panel rounded-2xl p-6 shadow-2xl md:p-8">
 
             {/* Header */}
 
             <div className="mb-6 text-center">
 
 
-              <h1 className="mt-2 text-2xl font-bold">
-                Create your account as<span className="text-blue-500"> Teacher</span>
+              <h1 className="mt-2 text-2xl font-bold" style={{ fontFamily: "var(--font-display)" }}>
+                Create your account as<span className="text-gradient"> Teacher</span>
               </h1>
 
               <p className="mt-2 text-sm text-slate-500">
@@ -261,7 +261,7 @@ function TeacherSignup() {
 
               <button
                 type="submit"
-                className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-600/20"
+                className="btn-primary w-full !py-3"
               >
                 Create Teacher Account
               </button>
@@ -277,7 +277,7 @@ function TeacherSignup() {
                 Already have an account?
                 <Link
                   to="/login"
-                  className="ml-1 text-blue-400 hover:text-blue-300"
+                  className="link-underline ml-1 text-blue-400 hover:text-blue-300"
                 >
                   Log in
                 </Link>

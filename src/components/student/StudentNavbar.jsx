@@ -77,16 +77,16 @@ function StudentNavbar() {
 
           <NavLink
             to="/student/dashboard"
-            className="flex shrink-0 items-center gap-3"
+            className="group flex shrink-0 items-center gap-3"
           >
 
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600">
+            <div className="orbit-ring flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 transition-transform duration-500 group-hover:scale-110">
               <span className="text-lg font-bold text-white">
                 S
               </span>
             </div>
 
-            <span className="hidden text-lg font-bold text-white sm:block">
+            <span className="hidden text-lg font-bold text-white sm:block" style={{ fontFamily: "var(--font-display)" }}>
               StudySphere
             </span>
 
@@ -200,7 +200,7 @@ function StudentNavbar() {
 
         {mobileMenuOpen && (
 
-          <div className="border-t border-slate-800 bg-slate-950 px-6 py-4 lg:hidden">
+          <div className="mobile-menu-enter border-t border-slate-800 bg-slate-950 px-6 py-4 lg:hidden">
 
             <nav className="space-y-1">
 

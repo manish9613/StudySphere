@@ -1,6 +1,6 @@
 function Focus() {
   return (
-    <div className="min-h-screen bg-slate-950 px-6 py-16 text-white">
+    <div className="page-enter min-h-screen bg-slate-950 px-6 py-16 text-white">
 
       <div className="mx-auto max-w-7xl">
 

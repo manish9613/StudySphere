@@ -1,3 +1,5 @@
+import { useNavigate } from "react-router-dom";
+
 import {
   X,
   UserCircle,
@@ -9,24 +11,58 @@ import {
   ChevronRight,
 } from "lucide-react";
 
+
 function ProfileDrawer({
   open,
   onClose,
   role = "student",
 }) {
+  const navigate = useNavigate();
+
   if (!open) return null;
 
   const isTeacher = role === "teacher";
 
+
+  /* =====================================================
+     NAVIGATION
+  ===================================================== */
+
+  const handleNavigate = (path) => {
+    onClose();
+    navigate(path);
+  };
+
+
+  /* =====================================================
+     LOGOUT
+  ===================================================== */
+
+  const handleLogout = () => {
+    // Remove authentication data when we implement login
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("role");
+
+    onClose();
+
+    navigate("/login");
+  };
+
+
   return (
+    /* =====================================================
+       BACKDROP
+    ===================================================== */
+
     <div
-      className="fixed inset-0 z-100 bg-black/50 backdrop-blur-[2px]"
+      className="fixed inset-0 z-60 bg-black/50 backdrop-blur-[2px]"
       onClick={onClose}
     >
 
-      {/* =====================================================
+      {/* =================================================
           DRAWER
-      ===================================================== */}
+      ================================================= */}
 
       <aside
         className="absolute right-0 top-0 flex h-full w-full max-w-sm flex-col border-l border-slate-800 bg-slate-950 shadow-2xl"
@@ -59,7 +95,7 @@ function ProfileDrawer({
             PROFILE INFORMATION
         ================================================= */}
 
-        <div className="border-b border-slate-800 p-6">
+        <div className="shrink-0 border-b border-slate-800 p-6">
 
           <div className="flex items-center gap-4">
 
@@ -72,7 +108,10 @@ function ProfileDrawer({
                   : "bg-blue-500/10 text-blue-400"
               }`}
             >
-              <UserCircle size={32} strokeWidth={1.6} />
+              <UserCircle
+                size={32}
+                strokeWidth={1.6}
+              />
             </div>
 
 
@@ -97,7 +136,9 @@ function ProfileDrawer({
                     : "bg-blue-500/10 text-blue-400"
                 }`}
               >
-                {isTeacher ? "Teacher Account" : "Student Account"}
+                {isTeacher
+                  ? "Teacher Account"
+                  : "Student Account"}
               </span>
 
             </div>
@@ -118,10 +159,19 @@ function ProfileDrawer({
           </p>
 
 
-          {/* My Profile */}
+          {/* =================================================
+              MY PROFILE
+          ================================================= */}
 
           <button
             type="button"
+            onClick={() =>
+              handleNavigate(
+                isTeacher
+                  ? "/teacher/profile"
+                  : "/student/profile"
+              )
+            }
             className="group flex w-full items-center gap-4 rounded-xl px-3 py-3.5 text-left transition hover:bg-slate-900"
           >
 
@@ -130,6 +180,7 @@ function ProfileDrawer({
             </div>
 
             <div className="flex-1">
+
               <p className="text-sm font-medium text-slate-200">
                 My Profile
               </p>
@@ -137,6 +188,7 @@ function ProfileDrawer({
               <p className="mt-0.5 text-xs text-slate-600">
                 View and edit your profile
               </p>
+
             </div>
 
             <ChevronRight
@@ -147,10 +199,19 @@ function ProfileDrawer({
           </button>
 
 
-          {/* Courses */}
+          {/* =================================================
+              COURSES
+          ================================================= */}
 
           <button
             type="button"
+            onClick={() =>
+              handleNavigate(
+                isTeacher
+                  ? "/teacher/courses"
+                  : "/student/courses"
+              )
+            }
             className="group flex w-full items-center gap-4 rounded-xl px-3 py-3.5 text-left transition hover:bg-slate-900"
           >
 
@@ -161,7 +222,7 @@ function ProfileDrawer({
             <div className="flex-1">
 
               <p className="text-sm font-medium text-slate-200">
-                {isTeacher ? "My Courses" : "My Courses"}
+                My Courses
               </p>
 
               <p className="mt-0.5 text-xs text-slate-600">
@@ -180,10 +241,19 @@ function ProfileDrawer({
           </button>
 
 
-          {/* Settings */}
+          {/* =================================================
+              SETTINGS
+          ================================================= */}
 
           <button
             type="button"
+            onClick={() =>
+              handleNavigate(
+                isTeacher
+                  ? "/teacher/settings"
+                  : "/student/settings"
+              )
+            }
             className="group flex w-full items-center gap-4 rounded-xl px-3 py-3.5 text-left transition hover:bg-slate-900"
           >
 
@@ -211,10 +281,19 @@ function ProfileDrawer({
           </button>
 
 
-          {/* Notifications */}
+          {/* =================================================
+              NOTIFICATIONS
+          ================================================= */}
 
           <button
             type="button"
+            onClick={() =>
+              handleNavigate(
+                isTeacher
+                  ? "/teacher/notifications"
+                  : "/student/notifications"
+              )
+            }
             className="group flex w-full items-center gap-4 rounded-xl px-3 py-3.5 text-left transition hover:bg-slate-900"
           >
 
@@ -246,10 +325,15 @@ function ProfileDrawer({
           </button>
 
 
-          {/* Help */}
+          {/* =================================================
+              HELP & SUPPORT
+          ================================================= */}
 
           <button
             type="button"
+            onClick={() =>
+              handleNavigate("/help")
+            }
             className="group flex w-full items-center gap-4 rounded-xl px-3 py-3.5 text-left transition hover:bg-slate-900"
           >
 
@@ -283,14 +367,15 @@ function ProfileDrawer({
             LOGOUT
         ================================================= */}
 
-        <div className="shrink-0 border-t border-slate-800 p-4">
+        <div className="shrink-0 border-t border-slate-800 bg-slate-950 p-4">
 
           <button
             type="button"
+            onClick={handleLogout}
             className="group flex w-full items-center gap-4 rounded-xl border border-red-500/10 bg-red-500/5 px-4 py-3.5 text-left transition hover:border-red-500/20 hover:bg-red-500/10"
           >
 
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500/10 text-red-400">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500/10 text-red-400 transition group-hover:bg-red-500/15">
               <LogOut size={19} />
             </div>
 
@@ -315,5 +400,6 @@ function ProfileDrawer({
     </div>
   );
 }
+
 
 export default ProfileDrawer;

@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 function Community() {
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="page-enter min-h-screen bg-slate-950 text-white">
 
       {/* Header */}
       <section className="border-b border-slate-800">

@@ -18,13 +18,21 @@ import RoleSelection from "./pages/RoleSelection";
 import StudentDashboard from "./pages/StudentDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
 
+import StudentProfile from "./pages/StudentProfile";
+import StudentCourses from "./pages/StudentCourses";
+import CourseDetails from "./pages/CourseDetails";
+import Lesson from "./pages/Lesson";
+
+import CreateCourse from "./pages/CreateCourse";
+import TeacherCourses from "./pages/TeacherCourses";
+import ManageCourse from "./pages/ManageCourse";
 function App() {
   return (
     <Routes>
 
-      {/* =====================================================
-          HOME
-      ===================================================== */}
+      {/* =========================
+          PUBLIC PAGES
+      ========================= */}
 
       <Route
         path="/"
@@ -41,50 +49,25 @@ function App() {
         }
       />
 
-
-      {/* =====================================================
-          LOGIN
-      ===================================================== */}
-
       <Route
         path="/login"
         element={<Login />}
       />
-
-
-      {/* =====================================================
-          SIGNUP ROLE SELECTION
-      ===================================================== */}
 
       <Route
         path="/signup"
         element={<RoleSelection />}
       />
 
-
-      {/* =====================================================
-          STUDENT SIGNUP
-      ===================================================== */}
-
       <Route
         path="/signup/student"
         element={<Signup />}
       />
 
-
-      {/* =====================================================
-          TEACHER SIGNUP
-      ===================================================== */}
-
       <Route
         path="/signup/teacher"
         element={<TeacherSignup />}
       />
-
-
-      {/* =====================================================
-          COMMUNITY
-      ===================================================== */}
 
       <Route
         path="/community"
@@ -101,11 +84,6 @@ function App() {
         }
       />
 
-
-      {/* =====================================================
-          FOCUS
-      ===================================================== */}
-
       <Route
         path="/focus"
         element={
@@ -120,11 +98,6 @@ function App() {
           </>
         }
       />
-
-
-      {/* =====================================================
-          AI MENTOR
-      ===================================================== */}
 
       <Route
         path="/ai-mentor"
@@ -141,11 +114,6 @@ function App() {
         }
       />
 
-
-      {/* =====================================================
-          ORGANIZE
-      ===================================================== */}
-
       <Route
         path="/organize"
         element={
@@ -161,11 +129,6 @@ function App() {
         }
       />
 
-
-      {/* =====================================================
-          PLATFORMS
-      ===================================================== */}
-
       <Route
         path="/platforms"
         element={
@@ -180,11 +143,6 @@ function App() {
           </>
         }
       />
-
-
-      {/* =====================================================
-          PROGRESS
-      ===================================================== */}
 
       <Route
         path="/progress"
@@ -202,33 +160,59 @@ function App() {
       />
 
 
-      {/* =====================================================
-          STUDENT DASHBOARD
-          
-          IMPORTANT:
-          No public Navbar here.
-          
-          StudentNavbar is already inside
-          StudentDashboard.jsx
-      ===================================================== */}
+      {/* =========================
+          STUDENT PAGES
+      ========================= */}
 
       <Route
         path="/student/dashboard"
         element={<StudentDashboard />}
       />
 
+      <Route
+        path="/student/profile"
+        element={<StudentProfile />}
+      />
 
-      {/* =====================================================
-          TEACHER DASHBOARD
-          
-          TeacherNavbar will be added later.
-      ===================================================== */}
+      <Route
+        path="/student/courses"
+        element={<StudentCourses />}
+      />
+
+      <Route
+        path="/student/courses/:courseId"
+        element={<CourseDetails />}
+      />
+
+      <Route
+        path="/student/courses/:courseId/lesson/:lessonId"
+        element={<Lesson />}
+      />
+
+
+      {/* =========================
+          TEACHER PAGES
+      ========================= */}
 
       <Route
         path="/teacher/dashboard"
         element={<TeacherDashboard />}
       />
+      <Route
+        path="/teacher/create-course"
+        element={<CreateCourse />}
+      />
 
+      <Route
+        path="/teacher/courses"
+        element={<TeacherCourses />}
+      />
+
+
+      <Route
+        path="/teacher/courses/:courseId/manage"
+        element={<ManageCourse />}
+      />
     </Routes>
   );
 }

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import {
   GraduationCap,
+  Presentation,
   BookOpen,
   ArrowRight,
   Users,
@@ -10,7 +11,7 @@ import {
 
 function RoleSelection() {
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="page-enter min-h-screen bg-slate-950 text-white">
 
       {/* Background */}
 
@@ -27,6 +28,16 @@ function RoleSelection() {
 
         <div className="w-full max-w-5xl">
 
+          {/* Logo */}
+          <Link to="/" className="group mb-10 flex items-center justify-center gap-3">
+            <div className="orbit-ring flex size-9 items-center justify-center">
+              <img src="/logo.png" alt="StudySphere" className="size-9 object-contain" />
+            </div>
+            <span className="text-xl font-bold" style={{ fontFamily: "var(--font-display)" }}>
+              Study<span className="text-gradient">Sphere</span>
+            </span>
+          </Link>
+
           {/* Heading */}
 
           <div className="mx-auto max-w-2xl text-center">
@@ -35,7 +46,7 @@ function RoleSelection() {
               Welcome to StudySphere
             </p>
 
-            <h1 className="mt-5 text-4xl font-bold tracking-tight md:text-5xl">
+            <h1 className="mt-5 text-4xl font-bold tracking-tight md:text-5xl" style={{ fontFamily: "var(--font-display)" }}>
               How are you joining StudySphere?
             </h1>
 
@@ -57,7 +68,7 @@ function RoleSelection() {
 
             <Link
               to="/signup/student"
-              className="role-select-card group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/70 p-8 transition-all duration-500 hover:-translate-y-2 hover:border-blue-500/40 hover:bg-slate-900"
+              className="role-select-card stagger-in stagger-1 group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/70 p-8 transition-all duration-500 hover:-translate-y-2 hover:border-blue-500/40 hover:bg-slate-900"
             >
 
               {/* Glow */}
@@ -144,7 +155,7 @@ function RoleSelection() {
 
             <Link
               to="/signup/teacher"
-              className="role-select-card group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/70 p-8 transition-all duration-500 hover:-translate-y-2 hover:border-purple-500/40 hover:bg-slate-900"
+              className="role-select-card stagger-in stagger-2 group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/70 p-8 transition-all duration-500 hover:-translate-y-2 hover:border-purple-500/40 hover:bg-slate-900"
             >
 
               {/* Glow */}
@@ -155,7 +166,7 @@ function RoleSelection() {
               {/* Icon */}
 
               <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-500/10 text-purple-400">
-                <GraduationCap
+                <Presentation
                   size={28}
                   strokeWidth={1.7}
                 />

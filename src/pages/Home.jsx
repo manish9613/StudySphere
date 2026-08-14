@@ -478,7 +478,7 @@ function Home() {
 
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="page-enter min-h-screen bg-slate-950 text-white">
 
       {/* =====================================================
           HERO
@@ -503,7 +503,10 @@ function Home() {
           <div>
 
             <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm text-blue-300">
-              <span className="h-2 w-2 rounded-full bg-blue-900" />
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-400" />
+              </span>
               Your smarter way to learn
             </div>
 
@@ -534,7 +537,7 @@ function Home() {
               </span>
 
               <span
-                className={`block text-blue-400 transform-gpu transition-all duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] ${headlineVisible
+                className={`text-gradient block transform-gpu transition-all duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] ${headlineVisible
                   ? "translate-y-0 opacity-100 blur-0"
                   : "translate-y-10 opacity-0 blur-sm"
                   }`}
@@ -559,7 +562,7 @@ function Home() {
 
               <Link
                 to="/signup"
-                className="rounded-full border border-slate-700 px-7 py-3.5 font-semibold text-white transition-all duration-300 hover:-translate-y-1 hover:bg-slate-900 hover:border-slate-600"
+                className="hero-button btn-primary !rounded-full !px-7 !py-3.5"
               >
                 Get Started →
               </Link>
@@ -1155,7 +1158,7 @@ function Home() {
               />
 
 
-              <button className="hero-button mt-8 w-full rounded-xl bg-blue-600 py-3 font-semibold hover:bg-blue-500">
+              <button className="hero-button btn-primary mt-8 w-full !rounded-xl">
                 Stay Focused
               </button>
 
@@ -1572,7 +1575,7 @@ function Home() {
 
           {/* <Link
             to="/signup"
-            className="hero-button mt-9 inline-block rounded-full bg-blue-600 px-8 py-4 font-semibold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-500"
+            className="hero-button btn-primary mt-9 inline-block !rounded-full !px-8 !py-4"
           >
             Get Started with StudySphere →
           </Link> */}

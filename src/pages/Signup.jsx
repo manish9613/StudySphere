@@ -21,30 +21,30 @@ function Signup() {
           {/* Logo */}
           <Link
             to="/"
-            className="mb-8 flex items-center justify-center gap-3"
+            className="group mb-8 flex items-center justify-center gap-3"
           >
 
-            <div className="flex size-10 items-center justify-center">
+            <div className="orbit-ring flex size-10 items-center justify-center">
               <img
                 src="/logo.png"
                 alt="StudySphere"
-                className="size-10 object-contain"
+                className="size-10 object-contain transition-transform duration-500 group-hover:scale-110"
               />
             </div>
 
-            <span className="text-2xl font-bold">
-              Study<span className="text-blue-500">Sphere</span>
+            <span className="text-2xl font-bold" style={{ fontFamily: "var(--font-display)" }}>
+              Study<span className="text-gradient">Sphere</span>
             </span>
 
           </Link>
 
 
           {/* Card */}
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl">
+          <div className="glass-panel rounded-3xl p-8 shadow-2xl">
 
             <div className="text-center">
 
-              <h1 className="text-3xl font-bold">
+              <h1 className="text-3xl font-bold" style={{ fontFamily: "var(--font-display)" }}>
                 Create your account
               </h1>
 
@@ -58,7 +58,7 @@ function Signup() {
             {/* Google */}
             <button
               type="button"
-              className="mt-7 flex w-full items-center justify-center gap-3 rounded-xl border border-slate-700 bg-slate-950 py-3 text-sm font-medium hover:bg-slate-800"
+              className="mt-7 flex w-full items-center justify-center gap-3 rounded-xl border border-slate-700 bg-slate-950 py-3 text-sm font-medium transition-colors hover:border-slate-600 hover:bg-slate-800"
             >
               <span className="font-bold">
                 G
@@ -95,7 +95,7 @@ function Signup() {
                 <input
                   type="text"
                   placeholder="Your name"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-blue-500"
+                  className="signup-input"
                 />
 
               </div>
@@ -111,7 +111,7 @@ function Signup() {
                 <input
                   type="email"
                   placeholder="you@example.com"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-blue-500"
+                  className="signup-input"
                 />
 
               </div>
@@ -127,7 +127,7 @@ function Signup() {
                 <input
                   type="password"
                   placeholder="Create a password"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-blue-500"
+                  className="signup-input"
                 />
 
               </div>
@@ -143,7 +143,7 @@ function Signup() {
                 <input
                   type="password"
                   placeholder="Confirm your password"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-blue-500"
+                  className="signup-input"
                 />
 
               </div>
@@ -163,7 +163,7 @@ function Signup() {
 
                   <Link
                     to="/terms"
-                    className="text-blue-400 hover:text-blue-300"
+                    className="link-underline text-blue-400 hover:text-blue-300"
                   >
                     Terms of Service
                   </Link>
@@ -172,7 +172,7 @@ function Signup() {
 
                   <Link
                     to="/privacy"
-                    className="text-blue-400 hover:text-blue-300"
+                    className="link-underline text-blue-400 hover:text-blue-300"
                   >
                     Privacy Policy
                   </Link>
@@ -185,7 +185,7 @@ function Signup() {
               {/* Signup */}
               <button
                 type="submit"
-                className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white hover:bg-blue-500"
+                className="btn-primary w-full !py-3"
               >
                 Create account
               </button>
@@ -200,7 +200,7 @@ function Signup() {
 
               <Link
                 to="/login"
-                className="ml-1 font-medium text-blue-400 hover:text-blue-300"
+                className="link-underline ml-1 font-medium text-blue-400 hover:text-blue-300"
               >
                 Sign in
               </Link>
@@ -212,7 +212,7 @@ function Signup() {
 
           <Link
             to="/"
-            className="mt-5 block text-center text-sm text-slate-600 hover:text-slate-400"
+            className="mt-5 block text-center text-sm text-slate-600 transition-colors hover:text-slate-400"
           >
             ← Back to StudySphere
           </Link>

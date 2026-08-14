@@ -2,10 +2,12 @@ import { Link } from "react-router-dom";
 
 function Footer() {
   return (
-    <footer className="border-t border-slate-800 bg-slate-950 text-slate-400">
+    <footer className="relative overflow-hidden border-t border-slate-800 bg-slate-950 text-slate-400">
+      <div className="pointer-events-none absolute -left-32 bottom-0 h-72 w-72 rounded-full bg-blue-600/5 blur-3xl" />
+      <div className="pointer-events-none absolute -right-32 top-0 h-72 w-72 rounded-full bg-purple-600/5 blur-3xl" />
 
       {/* Main Footer */}
-      <div className="mx-auto max-w-7xl px-6 py-16">
+      <div className="relative mx-auto max-w-7xl px-6 py-16">
 
         <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-5">
 
@@ -14,18 +16,18 @@ function Footer() {
 
             <Link
               to="/"
-              className="flex items-center gap-3"
+              className="group flex items-center gap-3"
             >
-              <div className="flex size-10 items-center justify-center">
+              <div className="orbit-ring flex size-10 items-center justify-center">
                 <img
                   src="/logo.png"
                   alt="StudySphere"
-                  className="size-10 object-contain"
+                  className="size-10 object-contain transition-transform duration-500 group-hover:scale-110"
                 />
               </div>
 
-              <span className="text-2xl font-bold text-white">
-                Study<span className="text-blue-500">Sphere</span>
+              <span className="text-2xl font-bold text-white" style={{ fontFamily: "var(--font-display)" }}>
+                Study<span className="text-gradient">Sphere</span>
               </span>
             </Link>
 
@@ -66,7 +68,7 @@ function Footer() {
               <li>
                 <Link
                   to="/focus"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   Focus
                 </Link>
@@ -75,7 +77,7 @@ function Footer() {
               <li>
                 <Link
                   to="/ai-mentor"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   AI Mentor
                 </Link>
@@ -84,7 +86,7 @@ function Footer() {
               <li>
                 <Link
                   to="/organize"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   Organize
                 </Link>
@@ -93,7 +95,7 @@ function Footer() {
               <li>
                 <Link
                   to="/progress"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   Progress
                 </Link>
@@ -102,7 +104,7 @@ function Footer() {
               <li>
                 <Link
                   to="/platforms"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   Platforms
                 </Link>
@@ -125,7 +127,7 @@ function Footer() {
               <li>
                 <Link
                   to="/notes"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   Notes
                 </Link>
@@ -134,7 +136,7 @@ function Footer() {
               <li>
                 <Link
                   to="/study-plans"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   Study Plans
                 </Link>
@@ -143,7 +145,7 @@ function Footer() {
               <li>
                 <Link
                   to="/help"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   Help Center
                 </Link>
@@ -152,7 +154,7 @@ function Footer() {
               <li>
                 <Link
                   to="/faq"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   FAQs
                 </Link>
@@ -161,7 +163,7 @@ function Footer() {
               <li>
                 <Link
                   to="/contact"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   Contact Us
                 </Link>
@@ -184,7 +186,7 @@ function Footer() {
               <li>
                 <Link
                   to="/privacy"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   Privacy Policy
                 </Link>
@@ -193,7 +195,7 @@ function Footer() {
               <li>
                 <Link
                   to="/terms"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   Terms of Service
                 </Link>
@@ -202,7 +204,7 @@ function Footer() {
               <li>
                 <Link
                   to="/cookies"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   Cookie Policy
                 </Link>
@@ -211,7 +213,7 @@ function Footer() {
               <li>
                 <Link
                   to="/refund"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   Refund Policy
                 </Link>
@@ -220,7 +222,7 @@ function Footer() {
               <li>
                 <Link
                   to="/security"
-                  className="text-sm hover:text-white"
+                  className="link-underline text-sm hover:text-white transition-colors"
                 >
                   Security
                 </Link>
@@ -234,7 +236,7 @@ function Footer() {
 
 
         {/* Contact / Query Box */}
-        <div className="mt-16 rounded-2xl border border-slate-800 bg-slate-900 p-6 md:flex md:items-center md:justify-between">
+        <div className="feature-card mt-16 rounded-2xl border border-slate-800 bg-slate-900 p-6 md:flex md:items-center md:justify-between">
 
           <div>
 
@@ -251,7 +253,7 @@ function Footer() {
 
           <a
             href="mailto:support@studysphere.com"
-            className="mt-5 inline-flex rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-500 md:mt-0"
+            className="btn-primary mt-5 md:mt-0"
           >
             Contact Support
           </a>
@@ -276,21 +278,21 @@ function Footer() {
 
             <a
               href="#"
-              className="text-sm text-slate-500 hover:text-white"
+              className="link-underline text-sm text-slate-500 hover:text-white transition-colors"
             >
               GitHub
             </a>
 
             <a
               href="#"
-              className="text-sm text-slate-500 hover:text-white"
+              className="link-underline text-sm text-slate-500 hover:text-white transition-colors"
             >
               LinkedIn
             </a>
 
             <a
               href="#"
-              className="text-sm text-slate-500 hover:text-white"
+              className="link-underline text-sm text-slate-500 hover:text-white transition-colors"
             >
               Instagram
             </a>

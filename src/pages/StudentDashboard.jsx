@@ -15,7 +15,7 @@ import {
 
 function StudentDashboard() {
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="page-enter min-h-screen bg-slate-950 text-white">
 
       {/* =====================================================
           STUDENT NAVBAR
@@ -55,7 +55,7 @@ function StudentDashboard() {
 
           <Link
             to="/focus"
-            className="hero-button inline-flex w-fit items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-500"
+            className="btn-primary hero-button inline-flex w-fit items-center gap-2 !rounded-xl"
           >
             <Play size={18} />
             Start Focus Session
@@ -72,7 +72,7 @@ function StudentDashboard() {
 
           {/* Focus Streak */}
 
-          <div className="dashboard-card rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+          <div className="dashboard-card stagger-in stagger-1 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
 
             <div className="flex items-center justify-between">
 
@@ -100,7 +100,7 @@ function StudentDashboard() {
 
           {/* Study Time */}
 
-          <div className="dashboard-card rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+          <div className="dashboard-card stagger-in stagger-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
 
             <div className="flex items-center justify-between">
 
@@ -128,7 +128,7 @@ function StudentDashboard() {
 
           {/* Tasks Completed */}
 
-          <div className="dashboard-card rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+          <div className="dashboard-card stagger-in stagger-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
 
             <div className="flex items-center justify-between">
 
@@ -156,7 +156,7 @@ function StudentDashboard() {
 
           {/* Progress */}
 
-          <div className="dashboard-card rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+          <div className="dashboard-card stagger-in stagger-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
 
             <div className="flex items-center justify-between">
 
@@ -212,7 +212,7 @@ function StudentDashboard() {
 
               <Link
                 to="/focus"
-                className="text-sm text-blue-400 hover:text-blue-300"
+                className="link-underline text-sm text-blue-400 hover:text-blue-300"
               >
                 Open Focus →
               </Link>
