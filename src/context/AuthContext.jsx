@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import { authApi, ApiError } from "../lib/api";
 
 const AuthContext = createContext();
 
@@ -6,28 +7,58 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // On mount, ask the backend who — if anyone — the current session
+  // cookie belongs to. This is the source of truth, not localStorage.
   useEffect(() => {
-    const storedUser = localStorage.getItem("studysphere_user");
+    let cancelled = false;
 
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    authApi
+      .me()
+      .then(({ user: sessionUser }) => {
+        if (!cancelled) setUser(sessionUser);
+      })
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
-    setLoading(false);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const login = (userData) => {
-    localStorage.setItem(
-      "studysphere_user",
-      JSON.stringify(userData)
-    );
-
-    setUser(userData);
+  const login = async (email, password) => {
+    try {
+      const { user: loggedInUser } = await authApi.login({ email, password });
+      setUser(loggedInUser);
+      return { success: true, user: loggedInUser };
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Login failed.";
+      return { success: false, error: message };
+    }
   };
 
-  const logout = () => {
-    localStorage.removeItem("studysphere_user");
-    setUser(null);
+  const signup = async (payload) => {
+    try {
+      const { user: newUser } = await authApi.signup(payload);
+      setUser(newUser);
+      return { success: true, user: newUser };
+    } catch (err) {
+      if (err instanceof ApiError) {
+        return { success: false, error: err.message, fieldErrors: err.data?.errors };
+      }
+      return { success: false, error: "Signup failed." };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await authApi.logout();
+    } finally {
+      setUser(null);
+    }
   };
 
   return (
@@ -35,6 +66,7 @@ export function AuthProvider({ children }) {
       value={{
         user,
         login,
+        signup,
         logout,
         loading,
         isAuthenticated: !!user,

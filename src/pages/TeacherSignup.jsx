@@ -1,7 +1,11 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
 
 function TeacherSignup() {
+  const { signup } = useAuth();
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -13,6 +17,9 @@ function TeacherSignup() {
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -21,18 +28,36 @@ function TeacherSignup() {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    setFieldErrors({});
 
     if (formData.password !== formData.confirmPassword) {
-      alert("Passwords do not match.");
+      setError("Passwords do not match.");
       return;
     }
 
-    console.log({
-      ...formData,
+    setSubmitting(true);
+
+    const result = await signup({
+      name: formData.name,
+      email: formData.email,
+      password: formData.password,
       role: "teacher",
+      expertise: formData.expertise,
+      bio: formData.bio,
     });
+
+    setSubmitting(false);
+
+    if (!result.success) {
+      setError(result.error);
+      if (result.fieldErrors) setFieldErrors(result.fieldErrors);
+      return;
+    }
+
+    navigate("/teacher/dashboard", { replace: true });
   };
 
   return (
@@ -91,6 +116,12 @@ function TeacherSignup() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
 
+              {error && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                  {error}
+                </div>
+              )}
+
               {/* Name + Email */}
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -109,6 +140,9 @@ function TeacherSignup() {
                     required
                     className="signup-input"
                   />
+                  {fieldErrors.name && (
+                    <p className="mt-1.5 text-xs text-red-400">{fieldErrors.name}</p>
+                  )}
                 </div>
 
 
@@ -126,6 +160,9 @@ function TeacherSignup() {
                     required
                     className="signup-input"
                   />
+                  {fieldErrors.email && (
+                    <p className="mt-1.5 text-xs text-red-400">{fieldErrors.email}</p>
+                  )}
                 </div>
 
               </div>
@@ -189,7 +226,7 @@ function TeacherSignup() {
                       value={formData.password}
                       onChange={handleChange}
                       placeholder="Create password"
-                      minLength="6"
+                      minLength="8"
                       required
                       className="signup-input pr-16"
                     />
@@ -203,6 +240,9 @@ function TeacherSignup() {
                     </button>
 
                   </div>
+                  {fieldErrors.password && (
+                    <p className="mt-1.5 text-xs text-red-400">{fieldErrors.password}</p>
+                  )}
                 </div>
 
 
@@ -261,9 +301,10 @@ function TeacherSignup() {
 
               <button
                 type="submit"
-                className="btn-primary w-full !py-3"
+                disabled={submitting}
+                className="btn-primary w-full !py-3 disabled:opacity-60"
               >
-                Create Teacher Account
+                {submitting ? "Creating account…" : "Create Teacher Account"}
               </button>
 
             </form>

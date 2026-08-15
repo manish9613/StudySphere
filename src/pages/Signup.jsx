@@ -4,6 +4,59 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 function Signup() {
+  const { signup } = useAuth();
+  const navigate = useNavigate();
+
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
+  const [agreed, setAgreed] = useState(false);
+  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleChange = (e) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setFieldErrors({});
+
+    if (form.password !== form.confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    if (!agreed) {
+      setError("Please agree to the Terms of Service and Privacy Policy.");
+      return;
+    }
+
+    setSubmitting(true);
+
+    const result = await signup({
+      name: form.name,
+      email: form.email,
+      password: form.password,
+      role: "student",
+    });
+
+    setSubmitting(false);
+
+    if (!result.success) {
+      setError(result.error);
+      if (result.fieldErrors) setFieldErrors(result.fieldErrors);
+      return;
+    }
+
+    navigate("/student/dashboard", { replace: true });
+  };
+
   return (
     <div className="page-enter min-h-screen bg-slate-950 text-white">
 
@@ -55,35 +108,14 @@ function Signup() {
             </div>
 
 
-            {/* Google */}
-            <button
-              type="button"
-              className="mt-7 flex w-full items-center justify-center gap-3 rounded-xl border border-slate-700 bg-slate-950 py-3 text-sm font-medium transition-colors hover:border-slate-600 hover:bg-slate-800"
-            >
-              <span className="font-bold">
-                G
-              </span>
-
-              Continue with Google
-            </button>
-
-
-            {/* Divider */}
-            <div className="my-6 flex items-center gap-4">
-
-              <div className="h-px flex-1 bg-slate-800" />
-
-              <span className="text-xs text-slate-600">
-                OR
-              </span>
-
-              <div className="h-px flex-1 bg-slate-800" />
-
-            </div>
-
-
             {/* Form */}
-            <form className="space-y-4">
+            <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
+
+              {error && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                  {error}
+                </div>
+              )}
 
               {/* Name */}
               <div>
@@ -94,9 +126,16 @@ function Signup() {
 
                 <input
                   type="text"
+                  name="name"
+                  required
+                  value={form.name}
+                  onChange={handleChange}
                   placeholder="Your name"
                   className="signup-input"
                 />
+                {fieldErrors.name && (
+                  <p className="mt-1.5 text-xs text-red-400">{fieldErrors.name}</p>
+                )}
 
               </div>
 
@@ -110,9 +149,16 @@ function Signup() {
 
                 <input
                   type="email"
+                  name="email"
+                  required
+                  value={form.email}
+                  onChange={handleChange}
                   placeholder="you@example.com"
                   className="signup-input"
                 />
+                {fieldErrors.email && (
+                  <p className="mt-1.5 text-xs text-red-400">{fieldErrors.email}</p>
+                )}
 
               </div>
 
@@ -126,9 +172,17 @@ function Signup() {
 
                 <input
                   type="password"
+                  name="password"
+                  required
+                  minLength={8}
+                  value={form.password}
+                  onChange={handleChange}
                   placeholder="Create a password"
                   className="signup-input"
                 />
+                {fieldErrors.password && (
+                  <p className="mt-1.5 text-xs text-red-400">{fieldErrors.password}</p>
+                )}
 
               </div>
 
@@ -142,6 +196,10 @@ function Signup() {
 
                 <input
                   type="password"
+                  name="confirmPassword"
+                  required
+                  value={form.confirmPassword}
+                  onChange={handleChange}
                   placeholder="Confirm your password"
                   className="signup-input"
                 />
@@ -154,6 +212,8 @@ function Signup() {
 
                 <input
                   type="checkbox"
+                  checked={agreed}
+                  onChange={(e) => setAgreed(e.target.checked)}
                   className="mt-1 h-4 w-4 accent-blue-600"
                 />
 
@@ -185,9 +245,10 @@ function Signup() {
               {/* Signup */}
               <button
                 type="submit"
-                className="btn-primary w-full !py-3"
+                disabled={submitting}
+                className="btn-primary w-full !py-3 disabled:opacity-60"
               >
-                Create account
+                {submitting ? "Creating account…" : "Create account"}
               </button>
 
             </form>

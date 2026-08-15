@@ -35,3 +35,7 @@ lerna-debug.log*
 
 # Vite
 vite.config.*.timestamp-*
+
+# Backend database (created at runtime, not source)
+backend/*.db
+backend/*.db-journal

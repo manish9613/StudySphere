@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
 import {
   X,
@@ -9,6 +10,7 @@ import {
   BookOpen,
   LogOut,
   ChevronRight,
+  LayoutDashboard,
 } from "lucide-react";
 
 
@@ -18,6 +20,7 @@ function ProfileDrawer({
   role = "student",
 }) {
   const navigate = useNavigate();
+  const { logout, user } = useAuth();
 
   if (!open) return null;
 
@@ -38,14 +41,9 @@ function ProfileDrawer({
      LOGOUT
   ===================================================== */
 
-  const handleLogout = () => {
-    // Remove authentication data when we implement login
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("role");
-
+  const handleLogout = async () => {
+    await logout();
     onClose();
-
     navigate("/login");
   };
 
@@ -120,13 +118,11 @@ function ProfileDrawer({
             <div className="min-w-0">
 
               <h3 className="truncate font-semibold text-white">
-                {isTeacher ? "Teacher" : "Student"}
+                {user?.name || (isTeacher ? "Teacher" : "Student")}
               </h3>
 
               <p className="mt-1 truncate text-sm text-slate-500">
-                {isTeacher
-                  ? "StudySphere Teacher"
-                  : "StudySphere Student"}
+                {user?.email || (isTeacher ? "StudySphere Teacher" : "StudySphere Student")}
               </p>
 
               <span
@@ -157,6 +153,46 @@ function ProfileDrawer({
           <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-slate-600">
             Account
           </p>
+
+
+          {/* =================================================
+              DASHBOARD
+          ================================================= */}
+
+          <button
+            type="button"
+            onClick={() =>
+              handleNavigate(
+                isTeacher
+                  ? "/teacher/dashboard"
+                  : "/student/dashboard"
+              )
+            }
+            className="group flex w-full items-center gap-4 rounded-xl px-3 py-3.5 text-left transition hover:bg-slate-900"
+          >
+
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-slate-400 transition group-hover:bg-slate-800 group-hover:text-white">
+              <LayoutDashboard size={19} />
+            </div>
+
+            <div className="flex-1">
+
+              <p className="text-sm font-medium text-slate-200">
+                Dashboard
+              </p>
+
+              <p className="mt-0.5 text-xs text-slate-600">
+                Go to your dashboard
+              </p>
+
+            </div>
+
+            <ChevronRight
+              size={17}
+              className="text-slate-700 transition group-hover:text-slate-400"
+            />
+
+          </button>
 
 
           {/* =================================================

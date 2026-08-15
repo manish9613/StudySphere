@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { LayoutDashboard, UserCircle } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import ProfileDrawer from "./dashboard/ProfileDrawer";
 
 const HomeIcon = () => (
   <svg
@@ -32,16 +35,19 @@ const MenuIcon = ({ open }) => (
 
 function Navbar() {
   const location = useLocation();
+  const { user, isAuthenticated } = useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  const dashboardPath =
+    user?.role === "teacher" ? "/teacher/dashboard" : "/student/dashboard";
 
   const navLinks = [
     { name: "Home", path: "/", icon: true },
-    { name: "Focus", path: "/focus" },
     { name: "AI Mentor", path: "/ai-mentor" },
+    { name: "Explore", path: "/explore" },
     { name: "Community", path: "/community" },
-    { name: "Organize", path: "/organize" },
-    { name: "Progress", path: "/progress" },
     { name: "Platforms", path: "/platforms" },
   ];
 
@@ -101,9 +107,43 @@ function Navbar() {
 
         {/* Action Buttons */}
         <div className="flex items-center gap-3">
-          <Link to="/login" className="btn-primary !py-2.5 !px-6 hidden sm:inline-flex">
-            Sign in
-          </Link>
+          {isAuthenticated ? (
+            <div className="hidden items-center gap-2 sm:flex">
+              <Link
+                to={dashboardPath}
+                className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500"
+              >
+                <LayoutDashboard size={17} strokeWidth={1.8} />
+                Dashboard
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => setProfileOpen(true)}
+                aria-label="Open profile"
+                className="group flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 transition-all duration-200 hover:border-slate-700 hover:bg-slate-800"
+              >
+                <UserCircle
+                  size={20}
+                  strokeWidth={1.8}
+                  className="text-slate-400 transition-colors duration-200 group-hover:text-blue-400"
+                />
+
+                <div className="hidden text-left lg:block">
+                  <p className="text-sm font-medium text-slate-200">
+                    Profile
+                  </p>
+                  <p className="text-[11px] capitalize text-slate-500">
+                    {user?.role || "Student"}
+                  </p>
+                </div>
+              </button>
+            </div>
+          ) : (
+            <Link to="/login" className="btn-primary !py-2.5 !px-6 hidden sm:inline-flex">
+              Sign in
+            </Link>
+          )}
 
           {/* Mobile toggle */}
           <button
@@ -138,15 +178,48 @@ function Navbar() {
               );
             })}
 
-            <Link
-              to="/login"
-              onClick={() => setMenuOpen(false)}
-              className="btn-primary mt-3 w-full sm:hidden"
-            >
-              Sign in
-            </Link>
+            {isAuthenticated ? (
+              <div className="mt-3 flex flex-col gap-2 sm:hidden">
+                <Link
+                  to={dashboardPath}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
+                >
+                  <LayoutDashboard size={18} strokeWidth={1.8} />
+                  Dashboard
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setProfileOpen(true);
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-medium text-slate-200 transition hover:border-slate-700 hover:bg-slate-800"
+                >
+                  <UserCircle size={18} strokeWidth={1.7} />
+                  Profile
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/login"
+                onClick={() => setMenuOpen(false)}
+                className="btn-primary mt-3 w-full sm:hidden"
+              >
+                Sign in
+              </Link>
+            )}
           </div>
         </div>
+      )}
+
+      {isAuthenticated && (
+        <ProfileDrawer
+          open={profileOpen}
+          onClose={() => setProfileOpen(false)}
+          role={user?.role || "student"}
+        />
       )}
     </nav>
   );

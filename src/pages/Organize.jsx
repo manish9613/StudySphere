@@ -1,4 +1,147 @@
+import { useEffect, useState } from "react";
+import { BookOpen, CheckCircle2, Plus, Trash2 } from "lucide-react";
+
+import { organizeApi } from "../lib/api";
+
+const PRIORITY_STYLES = {
+  high: "bg-red-500/10 text-red-400",
+  medium: "bg-yellow-500/10 text-yellow-400",
+  low: "bg-green-500/10 text-green-400",
+};
+
+const SUBJECT_ICONS = ["📘", "💻", "⚛️", "🗄️", "⚙️", "🧪", "📐", "🌍"];
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function Organize() {
+  const [subjects, setSubjects] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const [newSubject, setNewSubject] = useState("");
+  const [addingSubject, setAddingSubject] = useState(false);
+
+  const [newTask, setNewTask] = useState("");
+  const [newTaskPriority, setNewTaskPriority] = useState("medium");
+  const [newTaskDuration, setNewTaskDuration] = useState(30);
+  const [addingTask, setAddingTask] = useState(false);
+
+  const today = todayStr();
+
+  const loadAll = () => {
+    Promise.all([
+      organizeApi.listSubjects(),
+      organizeApi.listTasks(today),
+      organizeApi.summary(),
+    ])
+      .then(([subjectsRes, tasksRes, summaryRes]) => {
+        setSubjects(subjectsRes.subjects);
+        setTasks(tasksRes.tasks);
+        setSummary(summaryRes);
+        setError(null);
+      })
+      .catch(() => setError("Couldn't load your Organize data."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleAddSubject = async (e) => {
+    e.preventDefault();
+    const name = newSubject.trim();
+    if (!name) return;
+
+    setAddingSubject(true);
+    try {
+      const icon = SUBJECT_ICONS[subjects.length % SUBJECT_ICONS.length];
+      const { subject } = await organizeApi.createSubject({ name, icon });
+      setSubjects((prev) => [...prev, subject]);
+      setSummary((prev) => (prev ? { ...prev, activeSubjects: prev.activeSubjects + 1 } : prev));
+      setNewSubject("");
+    } catch {
+      setError("Couldn't add that subject.");
+    } finally {
+      setAddingSubject(false);
+    }
+  };
+
+  const handleDeleteSubject = async (id) => {
+    const prevSubjects = subjects;
+    setSubjects((prev) => prev.filter((s) => s.id !== id));
+
+    try {
+      await organizeApi.deleteSubject(id);
+      setSummary((prev) => (prev ? { ...prev, activeSubjects: Math.max(0, prev.activeSubjects - 1) } : prev));
+    } catch {
+      setSubjects(prevSubjects);
+      setError("Couldn't delete that subject.");
+    }
+  };
+
+  const handleAddTask = async (e) => {
+    e.preventDefault();
+    const title = newTask.trim();
+    if (!title) return;
+
+    setAddingTask(true);
+    try {
+      const { task } = await organizeApi.createTask({
+        title,
+        priority: newTaskPriority,
+        durationMin: Number(newTaskDuration) || 30,
+        date: today,
+      });
+      setTasks((prev) => [...prev, task]);
+      setNewTask("");
+    } catch {
+      setError("Couldn't add that task.");
+    } finally {
+      setAddingTask(false);
+    }
+  };
+
+  const handleToggleTask = async (task) => {
+    const nextCompleted = !task.completed;
+
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, completed: nextCompleted } : t)));
+
+    try {
+      await organizeApi.setTaskCompleted(task.id, nextCompleted);
+      setSummary((prev) =>
+        prev
+          ? {
+            ...prev,
+            tasksCompletedAllTime: prev.tasksCompletedAllTime + (nextCompleted ? 1 : -1),
+          }
+          : prev
+      );
+    } catch {
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, completed: task.completed } : t)));
+      setError("Couldn't update that task.");
+    }
+  };
+
+  const handleDeleteTask = async (id) => {
+    const prevTasks = tasks;
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+
+    try {
+      await organizeApi.deleteTask(id);
+    } catch {
+      setTasks(prevTasks);
+      setError("Couldn't delete that task.");
+    }
+  };
+
+  const tasksCompletedToday = tasks.filter((t) => t.completed).length;
+
   return (
     <div className="page-enter min-h-screen bg-slate-950 px-6 py-16 text-white">
 
@@ -15,11 +158,16 @@ function Organize() {
           </h1>
 
           <p className="mt-3 max-w-2xl text-slate-400">
-            Manage your subjects, tasks, notes, and upcoming study goals
-            from one place.
+            Manage your subjects and daily tasks — everything here is saved
+            to your account.
           </p>
         </div>
 
+        {error && (
+          <p className="mt-6 text-sm text-red-400">
+            {error}
+          </p>
+        )}
 
         {/* Overview Cards */}
         <div className="mt-10 grid gap-5 md:grid-cols-3">
@@ -32,7 +180,7 @@ function Organize() {
             </p>
 
             <p className="mt-2 text-3xl font-bold">
-              5
+              {loading ? "—" : subjects.length}
             </p>
           </div>
 
@@ -41,24 +189,24 @@ function Organize() {
             <div className="text-2xl">✅</div>
 
             <p className="mt-4 text-sm text-slate-500">
-              Tasks Completed
+              Tasks Completed Today
             </p>
 
             <p className="mt-2 text-3xl font-bold">
-              24
+              {loading ? "—" : tasksCompletedToday}
             </p>
           </div>
 
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-            <div className="text-2xl">📝</div>
+            <div className="text-2xl">🏆</div>
 
             <p className="mt-4 text-sm text-slate-500">
-              Saved Notes
+              Completed All-Time
             </p>
 
             <p className="mt-2 text-3xl font-bold">
-              18
+              {loading || !summary ? "—" : summary.tasksCompletedAllTime}
             </p>
           </div>
 
@@ -84,121 +232,76 @@ function Organize() {
                 </p>
               </div>
 
-              <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500">
-                + Add
-              </button>
-
             </div>
+
+            <form onSubmit={handleAddSubject} className="mt-5 flex gap-2">
+              <input
+                type="text"
+                value={newSubject}
+                onChange={(e) => setNewSubject(e.target.value)}
+                placeholder="Add a subject (e.g. Networking)"
+                className="flex-1 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-blue-500 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={addingSubject || !newSubject.trim()}
+                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Plus size={16} />
+                Add
+              </button>
+            </form>
 
 
             <div className="mt-6 space-y-3">
 
-              <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 p-4">
+              {!loading && subjects.length === 0 && (
+                <p className="rounded-xl border border-dashed border-slate-800 p-6 text-center text-sm text-slate-600">
+                  No subjects yet — add one above to start tracking it.
+                </p>
+              )}
 
-                <div className="flex items-center gap-3">
+              {subjects.map((subject) => (
+                <div
+                  key={subject.id}
+                  className="group flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 p-4"
+                >
 
-                  <div className="flex size-10 items-center justify-center rounded-lg bg-blue-500/10">
-                    💻
+                  <div className="flex items-center gap-3">
+
+                    <div className="flex size-10 items-center justify-center rounded-lg bg-blue-500/10 text-lg">
+                      {subject.icon}
+                    </div>
+
+                    <div>
+                      <p className="font-medium">
+                        {subject.name}
+                      </p>
+
+                      <p className="text-xs text-slate-600">
+                        {subject.topicsCount} topics
+                      </p>
+                    </div>
+
                   </div>
 
-                  <div>
-                    <p className="font-medium">
-                      DSA
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-blue-400">
+                      {subject.progressPct}%
+                    </span>
 
-                    <p className="text-xs text-slate-600">
-                      32 topics
-                    </p>
-                  </div>
-
-                </div>
-
-                <span className="text-sm text-blue-400">
-                  72%
-                </span>
-
-              </div>
-
-
-              <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 p-4">
-
-                <div className="flex items-center gap-3">
-
-                  <div className="flex size-10 items-center justify-center rounded-lg bg-purple-500/10">
-                    ⚛️
-                  </div>
-
-                  <div>
-                    <p className="font-medium">
-                      React
-                    </p>
-
-                    <p className="text-xs text-slate-600">
-                      24 topics
-                    </p>
-                  </div>
-
-                </div>
-
-                <span className="text-sm text-purple-400">
-                  58%
-                </span>
-
-              </div>
-
-
-              <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 p-4">
-
-                <div className="flex items-center gap-3">
-
-                  <div className="flex size-10 items-center justify-center rounded-lg bg-cyan-500/10">
-                    🗄️
-                  </div>
-
-                  <div>
-                    <p className="font-medium">
-                      DBMS
-                    </p>
-
-                    <p className="text-xs text-slate-600">
-                      18 topics
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSubject(subject.id)}
+                      aria-label={`Delete ${subject.name}`}
+                      className="text-slate-700 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
 
                 </div>
-
-                <span className="text-sm text-cyan-400">
-                  45%
-                </span>
-
-              </div>
-
-
-              <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 p-4">
-
-                <div className="flex items-center gap-3">
-
-                  <div className="flex size-10 items-center justify-center rounded-lg bg-indigo-500/10">
-                    ⚙️
-                  </div>
-
-                  <div>
-                    <p className="font-medium">
-                      Operating Systems
-                    </p>
-
-                    <p className="text-xs text-slate-600">
-                      20 topics
-                    </p>
-                  </div>
-
-                </div>
-
-                <span className="text-sm text-indigo-400">
-                  39%
-                </span>
-
-              </div>
+              ))}
 
             </div>
 
@@ -220,109 +323,99 @@ function Organize() {
                 </p>
               </div>
 
-              <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500">
-                + Add
-              </button>
-
             </div>
+
+            <form onSubmit={handleAddTask} className="mt-5 space-y-2">
+              <input
+                type="text"
+                value={newTask}
+                onChange={(e) => setNewTask(e.target.value)}
+                placeholder="Add a task for today"
+                className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-blue-500 focus:outline-none"
+              />
+
+              <div className="flex gap-2">
+                <select
+                  value={newTaskPriority}
+                  onChange={(e) => setNewTaskPriority(e.target.value)}
+                  className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+
+                <input
+                  type="number"
+                  min="5"
+                  step="5"
+                  value={newTaskDuration}
+                  onChange={(e) => setNewTaskDuration(e.target.value)}
+                  className="w-24 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                />
+
+                <span className="flex items-center text-sm text-slate-500">
+                  minutes
+                </span>
+
+                <button
+                  type="submit"
+                  disabled={addingTask || !newTask.trim()}
+                  className="ml-auto flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Plus size={16} />
+                  Add
+                </button>
+              </div>
+            </form>
 
 
             <div className="mt-6 space-y-3">
 
-              <div className="flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
+              {!loading && tasks.length === 0 && (
+                <p className="rounded-xl border border-dashed border-slate-800 p-6 text-center text-sm text-slate-600">
+                  No tasks for today yet — add one above.
+                </p>
+              )}
 
-                <input
-                  type="checkbox"
-                  className="size-4 accent-blue-600"
-                />
+              {tasks.map((task) => (
+                <div
+                  key={task.id}
+                  className="group flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4"
+                >
 
-                <div className="flex-1">
-                  <p className="font-medium">
-                    Complete Arrays practice
-                  </p>
+                  <input
+                    type="checkbox"
+                    checked={task.completed}
+                    onChange={() => handleToggleTask(task)}
+                    className="size-4 accent-blue-600"
+                  />
 
-                  <p className="mt-1 text-xs text-slate-600">
-                    DSA · 45 minutes
-                  </p>
+                  <div className="flex-1">
+                    <p className={`font-medium ${task.completed ? "text-slate-500 line-through" : ""}`}>
+                      {task.title}
+                    </p>
+
+                    <p className="mt-1 text-xs text-slate-600">
+                      {task.durationMin} minutes
+                    </p>
+                  </div>
+
+                  <span className={`rounded-full px-3 py-1 text-xs ${PRIORITY_STYLES[task.priority]}`}>
+                    {task.priority[0].toUpperCase() + task.priority.slice(1)}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteTask(task.id)}
+                    aria-label={`Delete ${task.title}`}
+                    className="text-slate-700 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+
                 </div>
-
-                <span className="rounded-full bg-red-500/10 px-3 py-1 text-xs text-red-400">
-                  High
-                </span>
-
-              </div>
-
-
-              <div className="flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
-
-                <input
-                  type="checkbox"
-                  className="size-4 accent-blue-600"
-                />
-
-                <div className="flex-1">
-                  <p className="font-medium">
-                    Revise React Hooks
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-600">
-                    React · 30 minutes
-                  </p>
-                </div>
-
-                <span className="rounded-full bg-yellow-500/10 px-3 py-1 text-xs text-yellow-400">
-                  Medium
-                </span>
-
-              </div>
-
-
-              <div className="flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
-
-                <input
-                  type="checkbox"
-                  className="size-4 accent-blue-600"
-                />
-
-                <div className="flex-1">
-                  <p className="font-medium">
-                    Read DBMS notes
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-600">
-                    DBMS · 25 minutes
-                  </p>
-                </div>
-
-                <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs text-green-400">
-                  Low
-                </span>
-
-              </div>
-
-
-              <div className="flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
-
-                <input
-                  type="checkbox"
-                  className="size-4 accent-blue-600"
-                />
-
-                <div className="flex-1">
-                  <p className="font-medium">
-                    AI Mentor session
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-600">
-                    React · 20 minutes
-                  </p>
-                </div>
-
-                <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs text-blue-400">
-                  Today
-                </span>
-
-              </div>
+              ))}
 
             </div>
 
@@ -331,83 +424,42 @@ function Organize() {
         </div>
 
 
-        {/* Upcoming */}
-        <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        {/* Weekly summary */}
+        {!loading && summary && (
+          <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-6">
 
-          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
+                <CheckCircle2 size={20} />
+              </div>
 
-            <div>
-              <h2 className="text-xl font-semibold">
-                Upcoming
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Don't miss your important study goals.
-              </p>
+              <div>
+                <h2 className="text-xl font-semibold">
+                  This Week
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Tasks you've completed across the last 7 days.
+                </p>
+              </div>
             </div>
 
-            <button className="text-sm text-blue-400 hover:text-blue-300">
-              View calendar →
-            </button>
+            <p className="mt-6 text-3xl font-bold">
+              {summary.weekTasksCompleted}
+              <span className="ml-2 text-base font-normal text-slate-500">
+                / {summary.weekTasksTotal} tasks completed
+              </span>
+            </p>
 
+          </section>
+        )}
+
+        {!loading && subjects.length === 0 && tasks.length === 0 && (
+          <div className="mt-8 flex items-center gap-3 rounded-2xl border border-dashed border-slate-800 bg-slate-900/50 p-6 text-sm text-slate-500">
+            <BookOpen size={18} />
+            Add a subject and a task above to start building your day-by-day
+            organize history.
           </div>
-
-
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-5">
-
-              <p className="text-xs font-medium uppercase tracking-wider text-blue-400">
-                Tomorrow
-              </p>
-
-              <h3 className="mt-3 font-semibold">
-                DBMS Revision
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-500">
-                2:00 PM · 1 hour
-              </p>
-
-            </div>
-
-
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-5">
-
-              <p className="text-xs font-medium uppercase tracking-wider text-purple-400">
-                Friday
-              </p>
-
-              <h3 className="mt-3 font-semibold">
-                React Project
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-500">
-                5:00 PM · 2 hours
-              </p>
-
-            </div>
-
-
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-5">
-
-              <p className="text-xs font-medium uppercase tracking-wider text-cyan-400">
-                Sunday
-              </p>
-
-              <h3 className="mt-3 font-semibold">
-                Weekly Review
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-500">
-                10:00 AM · 45 minutes
-              </p>
-
-            </div>
-
-          </div>
-
-        </section>
+        )}
 
       </div>
 

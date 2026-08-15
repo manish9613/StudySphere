@@ -35,27 +35,27 @@ function StudentNavbar() {
     },
     {
       name: "Focus",
-      path: "/student/focus",
+      path: "/focus",
       icon: Timer,
     },
     {
       name: "AI Mentor",
-      path: "/student/ai-mentor",
+      path: "/ai-mentor",
       icon: Bot,
     },
     {
       name: "Tasks",
-      path: "/student/tasks",
+      path: "/organize",
       icon: CheckSquare,
     },
     {
       name: "Progress",
-      path: "/student/progress",
+      path: "/progress",
       icon: TrendingUp,
     },
     {
       name: "Community",
-      path: "/student/community",
+      path: "/community",
       icon: Users,
     },
   ];

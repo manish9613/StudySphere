@@ -12,10 +12,12 @@ import {
   Filter,
   CheckCircle2,
 } from "lucide-react";
+import { getEnrolledCourseIds } from "../lib/enrollment";
 
 function StudentCourses() {
   const [favoriteTopics, setFavoriteTopics] = useState([]);
   const [teacherCourses, setTeacherCourses] = useState([]);
+  const [enrolledIds, setEnrolledIds] = useState(getEnrolledCourseIds());
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
 
@@ -89,6 +91,22 @@ function StudentCourses() {
         loadTeacherCourses
       );
     };
+  }, []);
+
+
+  /* =====================================================
+     LOAD ENROLLED COURSE IDS
+  ===================================================== */
+
+  useEffect(() => {
+    const loadEnrolledIds = () => {
+      setEnrolledIds(getEnrolledCourseIds());
+    };
+
+    loadEnrolledIds();
+
+    window.addEventListener("storage", loadEnrolledIds);
+    return () => window.removeEventListener("storage", loadEnrolledIds);
   }, []);
 
 
@@ -260,8 +278,11 @@ function StudentCourses() {
       progress:
         course.progress || 0,
 
+      // Only actually-enrolled courses (tracked in enrolledCourseIds) show
+      // up as enrolled — not whatever the teacher happened to save on the
+      // course record itself.
       enrolled:
-        course.enrolled || false,
+        enrolledIds.includes(String(course.id)),
 
       color:
         course.color || "purple",
@@ -272,7 +293,7 @@ function StudentCourses() {
 
       isTeacherCourse: true,
     }));
-  }, [teacherCourses]);
+  }, [teacherCourses, enrolledIds]);
 
 
   /* =====================================================
@@ -280,11 +301,16 @@ function StudentCourses() {
   ===================================================== */
 
   const courses = useMemo(() => {
+    const demoCoursesWithRealEnrollment = demoCourses.map((course) => ({
+      ...course,
+      enrolled: enrolledIds.includes(String(course.id)),
+    }));
+
     return [
-      ...demoCourses,
+      ...demoCoursesWithRealEnrollment,
       ...formattedTeacherCourses,
     ];
-  }, [formattedTeacherCourses]);
+  }, [formattedTeacherCourses, enrolledIds]);
 
 
   /* =====================================================

@@ -1,22 +1,32 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
   BookOpen,
   Plus,
   Trash2,
   Play,
   Save,
+  ImagePlus,
+  X,
+  AlertCircle,
 } from "lucide-react";
+
+import TeacherNavbar from "../components/teacher/TeacherNavbar";
+import { useAuth } from "../context/AuthContext";
+
+const MAX_THUMBNAIL_BYTES = 3 * 1024 * 1024; // 3MB
 
 function CreateCourse() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const fileInputRef = useRef(null);
 
   const [course, setCourse] = useState({
     title: "",
     category: "",
     level: "Beginner",
     description: "",
+    thumbnail: "",
   });
 
   const [lessons, setLessons] = useState([
@@ -28,6 +38,9 @@ function CreateCourse() {
       duration: "",
     },
   ]);
+
+  const [lessonError, setLessonError] = useState("");
+  const [thumbnailError, setThumbnailError] = useState("");
 
   /* =====================================================
      COURSE INPUT
@@ -43,10 +56,49 @@ function CreateCourse() {
   };
 
   /* =====================================================
+     THUMBNAIL UPLOAD
+  ===================================================== */
+
+  const handleThumbnailChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setThumbnailError("Please upload an image file.");
+      return;
+    }
+
+    if (file.size > MAX_THUMBNAIL_BYTES) {
+      setThumbnailError("Image is too large. Please choose one under 3MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setThumbnailError("");
+      setCourse((prev) => ({
+        ...prev,
+        thumbnail: reader.result,
+      }));
+    };
+    reader.onerror = () => {
+      setThumbnailError("Couldn't read that image. Please try again.");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeThumbnail = () => {
+    setCourse((prev) => ({ ...prev, thumbnail: "" }));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  /* =====================================================
      LESSON INPUT
   ===================================================== */
 
   const handleLessonChange = (id, field, value) => {
+    if (lessonError) setLessonError("");
+
     setLessons((prev) =>
       prev.map((lesson) =>
         lesson.id === id
@@ -119,10 +171,43 @@ function CreateCourse() {
   };
 
   /* =====================================================
+     LESSON COMPLETION CHECK
+     (Everything except notes/description is required)
+  ===================================================== */
+
+  const isLessonComplete = (lesson) =>
+    Boolean(
+      lesson.title.trim() &&
+        extractYouTubeVideoId(lesson.videoUrl) &&
+        lesson.duration.trim()
+    );
+
+  const getLessonMissingFields = (lesson) => {
+    const missing = [];
+    if (!lesson.title.trim()) missing.push("title");
+    if (!extractYouTubeVideoId(lesson.videoUrl))
+      missing.push("a valid YouTube URL");
+    if (!lesson.duration.trim()) missing.push("duration");
+    return missing;
+  };
+
+  /* =====================================================
      ADD LESSON
   ===================================================== */
 
   const addLesson = () => {
+    const lastLesson = lessons[lessons.length - 1];
+
+    if (!isLessonComplete(lastLesson)) {
+      const missing = getLessonMissingFields(lastLesson);
+      setLessonError(
+        `Please add ${missing.join(", ")} for Lesson ${lessons.length} before adding a new lesson.`
+      );
+      return;
+    }
+
+    setLessonError("");
+
     setLessons((prev) => [
       ...prev,
       {
@@ -141,6 +226,8 @@ function CreateCourse() {
 
   const removeLesson = (id) => {
     if (lessons.length === 1) return;
+
+    setLessonError("");
 
     setLessons((prev) =>
       prev.filter((lesson) => lesson.id !== id)
@@ -169,15 +256,22 @@ function CreateCourse() {
       return;
     }
 
-    const validLessons = lessons.filter(
-      (lesson) =>
-        lesson.title.trim() &&
-        extractYouTubeVideoId(lesson.videoUrl)
+    if (!course.thumbnail) {
+      setThumbnailError("Please upload a course thumbnail image.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    const incompleteIndex = lessons.findIndex(
+      (lesson) => !isLessonComplete(lesson)
     );
 
-    if (validLessons.length === 0) {
-      alert(
-        "Please add at least one lesson with a valid YouTube URL."
+    if (incompleteIndex !== -1) {
+      const missing = getLessonMissingFields(
+        lessons[incompleteIndex]
+      );
+      setLessonError(
+        `Please add ${missing.join(", ")} for Lesson ${incompleteIndex + 1} before creating the course.`
       );
       return;
     }
@@ -190,12 +284,12 @@ function CreateCourse() {
     const newCourse = {
       id: Date.now(),
       ...course,
-      instructor: "StudySphere Teacher",
+      instructor: user?.name || "StudySphere Teacher",
       students: 0,
       rating: 0,
       progress: 0,
 
-      lessons: validLessons.map(
+      lessons: lessons.map(
         (lesson, index) => ({
           id: index + 1,
           title: lesson.title,
@@ -230,62 +324,37 @@ function CreateCourse() {
     <div className="page-enter min-h-screen bg-slate-950 text-white">
 
       {/* =====================================================
-          HEADER
+          NAVBAR
       ===================================================== */}
 
-      <header className="border-b border-slate-800 bg-slate-950">
-
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-
-          <button
-            type="button"
-            onClick={() =>
-              navigate("/teacher/dashboard")
-            }
-            className="flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
-          >
-            <ArrowLeft size={17} />
-            Back to Dashboard
-          </button>
-
-          <div className="flex items-center gap-2">
-
-            <BookOpen
-              size={20}
-              className="text-purple-400"
-            />
-
-            <span className="font-semibold">
-              Create Course
-            </span>
-
-          </div>
-
-        </div>
-
-      </header>
+      <TeacherNavbar />
 
 
       {/* =====================================================
           MAIN
       ===================================================== */}
 
-      <main className="mx-auto max-w-5xl px-6 py-10">
+      <main className="mx-auto max-w-5xl px-6 pb-16 pt-24">
 
-        <div className="mb-10">
+        <div className="mb-10 flex items-center gap-3">
 
-          <p className="text-sm font-semibold uppercase tracking-widest text-purple-400">
-            Teacher Studio
-          </p>
+          <div>
 
-          <h1 className="mt-2 text-3xl font-bold md:text-4xl">
-            Create a new course
-          </h1>
+            <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-purple-400">
+              <BookOpen size={16} />
+              Teacher Studio
+            </p>
 
-          <p className="mt-3 max-w-2xl text-slate-500">
-            Build your course and add YouTube lectures that
-            students can watch directly inside StudySphere.
-          </p>
+            <h1 className="mt-2 text-3xl font-bold md:text-4xl">
+              Create a new course
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-slate-500">
+              Build your course and add YouTube lectures that
+              students can watch directly inside StudySphere.
+            </p>
+
+          </div>
 
         </div>
 
@@ -316,12 +385,75 @@ function CreateCourse() {
 
             <div className="grid gap-6 md:grid-cols-2">
 
+              {/* Thumbnail */}
+
+              <div className="md:col-span-2">
+
+                <label className="mb-2 block text-sm font-medium text-slate-300">
+                  Course Thumbnail <span className="text-red-400">*</span>
+                </label>
+
+                <p className="mb-3 text-xs text-slate-600">
+                  This image will be shown on the course card and details page in Explore.
+                </p>
+
+                {course.thumbnail ? (
+                  <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-slate-800">
+                    <img
+                      src={course.thumbnail}
+                      alt="Course thumbnail preview"
+                      className="h-44 w-full object-cover"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={removeThumbnail}
+                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-slate-950/80 text-white transition hover:bg-red-500/80"
+                      aria-label="Remove thumbnail"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <label
+                    htmlFor="course-thumbnail"
+                    className="flex h-44 w-full max-w-sm cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-700 bg-slate-950 text-slate-500 transition hover:border-purple-500/50 hover:text-purple-400"
+                  >
+                    <ImagePlus size={26} />
+                    <span className="text-sm font-medium">
+                      Click to upload a thumbnail
+                    </span>
+                    <span className="text-xs text-slate-600">
+                      PNG or JPG, up to 3MB
+                    </span>
+                  </label>
+                )}
+
+                <input
+                  ref={fileInputRef}
+                  id="course-thumbnail"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleThumbnailChange}
+                  className="hidden"
+                />
+
+                {thumbnailError && (
+                  <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-red-400">
+                    <AlertCircle size={13} />
+                    {thumbnailError}
+                  </p>
+                )}
+
+              </div>
+
+
               {/* Title */}
 
               <div className="md:col-span-2">
 
                 <label className="mb-2 block text-sm font-medium text-slate-300">
-                  Course Title
+                  Course Title <span className="text-red-400">*</span>
                 </label>
 
                 <input
@@ -341,7 +473,7 @@ function CreateCourse() {
               <div>
 
                 <label className="mb-2 block text-sm font-medium text-slate-300">
-                  Category
+                  Category <span className="text-red-400">*</span>
                 </label>
 
                 <input
@@ -361,7 +493,7 @@ function CreateCourse() {
               <div>
 
                 <label className="mb-2 block text-sm font-medium text-slate-300">
-                  Level
+                  Level <span className="text-red-400">*</span>
                 </label>
 
                 <select
@@ -383,7 +515,7 @@ function CreateCourse() {
               <div className="md:col-span-2">
 
                 <label className="mb-2 block text-sm font-medium text-slate-300">
-                  Course Description
+                  Course Description <span className="text-red-400">*</span>
                 </label>
 
                 <textarea
@@ -417,7 +549,7 @@ function CreateCourse() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Add your YouTube lectures here.
+                  Add your YouTube lectures here. Title, video URL and duration are required — notes are optional.
                 </p>
 
               </div>
@@ -433,6 +565,13 @@ function CreateCourse() {
               </button>
 
             </div>
+
+            {lessonError && (
+              <div className="mt-5 flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                <span>{lessonError}</span>
+              </div>
+            )}
 
 
             <div className="mt-8 space-y-5">
@@ -495,7 +634,7 @@ function CreateCourse() {
                     <div className="md:col-span-2">
 
                       <label className="mb-2 block text-sm font-medium text-slate-300">
-                        Lesson Title
+                        Lesson Title <span className="text-red-400">*</span>
                       </label>
 
                       <input
@@ -526,7 +665,7 @@ function CreateCourse() {
                           className="text-red-400"
                         />
 
-                        YouTube Lecture URL
+                        YouTube Lecture URL <span className="text-red-400">*</span>
 
                       </label>
 
@@ -574,7 +713,7 @@ function CreateCourse() {
                     <div>
 
                       <label className="mb-2 block text-sm font-medium text-slate-300">
-                        Duration
+                        Duration <span className="text-red-400">*</span>
                       </label>
 
                       <input
@@ -594,12 +733,12 @@ function CreateCourse() {
                     </div>
 
 
-                    {/* Description */}
+                    {/* Description / Notes */}
 
                     <div className="md:col-span-2">
 
                       <label className="mb-2 block text-sm font-medium text-slate-300">
-                        Lesson Description
+                        Lesson Notes <span className="text-slate-600">(optional)</span>
                       </label>
 
                       <textarea

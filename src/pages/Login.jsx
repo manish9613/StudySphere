@@ -1,6 +1,38 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
 
 function Login() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+
+    const result = await login(email, password);
+
+    setSubmitting(false);
+
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+
+    const redirectTo =
+      location.state?.from ||
+      (result.user.role === "teacher" ? "/teacher/dashboard" : "/student/dashboard");
+
+    navigate(redirectTo, { replace: true });
+  };
+
   return (
     <div className="page-enter relative min-h-screen overflow-hidden bg-slate-950 text-white">
 
@@ -63,30 +95,23 @@ function Login() {
                 </p>
               </div>
 
-              {/* Google */}
-              <button
-                type="button"
-                className="mt-8 flex w-full items-center justify-center gap-3 rounded-xl border border-slate-700 bg-slate-950 py-3 text-sm font-medium text-white transition-colors hover:border-slate-600 hover:bg-slate-800"
-              >
-                <span className="font-bold">G</span>
-                Continue with Google
-              </button>
-
-              {/* Divider */}
-              <div className="my-7 flex items-center gap-4">
-                <div className="h-px flex-1 bg-slate-800" />
-                <span className="text-xs text-slate-600">OR</span>
-                <div className="h-px flex-1 bg-slate-800" />
-              </div>
-
               {/* Form */}
-              <form className="space-y-5">
+              <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+                {error && (
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                    {error}
+                  </div>
+                )}
+
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-300">
                     Email address
                   </label>
                   <input
                     type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
                     className="signup-input"
                   />
@@ -106,13 +131,16 @@ function Login() {
                   </div>
                   <input
                     type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
                     className="signup-input"
                   />
                 </div>
 
-                <button type="submit" className="btn-primary w-full !py-3">
-                  Sign in
+                <button type="submit" disabled={submitting} className="btn-primary w-full !py-3 disabled:opacity-60">
+                  {submitting ? "Signing in…" : "Sign in"}
                 </button>
               </form>
 

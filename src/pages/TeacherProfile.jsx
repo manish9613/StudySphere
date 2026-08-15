@@ -8,13 +8,11 @@ import {
   GraduationCap,
   MapPin,
   Save,
-  Plus,
-  X,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
 
-function StudentProfile() {
+function TeacherProfile() {
   const { user } = useAuth();
 
   /* =====================================================
@@ -22,47 +20,39 @@ function StudentProfile() {
   ===================================================== */
 
   const defaultProfile = {
-  name: user?.name || "Student",
-  email: user?.email || "student@studysphere.com",
-  course: "B.Tech",
-  branch: "Electronics & Communication Engineering",
-  location: "India",
-  favoriteTopics: [],
-};
+    name: user?.name || "Teacher",
+    email: user?.email || "teacher@studysphere.com",
+    expertise: "",
+    bio: "",
+    location: "India",
+  };
 
-const [profile, setProfile] = useState(defaultProfile);
-
-  const [topicInput, setTopicInput] = useState("");
+  const [profile, setProfile] = useState(defaultProfile);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-  const savedProfile = localStorage.getItem("studentProfile");
+    const savedProfile = localStorage.getItem("teacherProfile");
 
-  let parsedProfile = {};
+    let extra = {};
 
-  if (savedProfile) {
-    try {
-      parsedProfile = JSON.parse(savedProfile);
-    } catch (error) {
-      console.error("Failed to load student profile:", error);
+    if (savedProfile) {
+      try {
+        extra = JSON.parse(savedProfile);
+      } catch (error) {
+        console.error("Failed to load teacher profile:", error);
+      }
     }
-  }
 
-  // Name/email always come from the logged-in account first —
-  // only the extra fields (course, branch, location, topics) persist locally.
-  setProfile({
-    ...defaultProfile,
-    ...parsedProfile,
-    name: user?.name || parsedProfile.name || defaultProfile.name,
-    email: user?.email || parsedProfile.email || defaultProfile.email,
-
-    // Make sure old profiles don't break
-    favoriteTopics: Array.isArray(parsedProfile.favoriteTopics)
-      ? parsedProfile.favoriteTopics
-      : [],
-  });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [user]);
+    // Name/email always come from the logged-in account first —
+    // only the extra fields (expertise, bio, location) persist locally.
+    setProfile({
+      ...defaultProfile,
+      ...extra,
+      name: user?.name || extra.name || defaultProfile.name,
+      email: user?.email || extra.email || defaultProfile.email,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   /* =====================================================
      HANDLE NORMAL INPUT CHANGES
@@ -80,64 +70,6 @@ const [profile, setProfile] = useState(defaultProfile);
   };
 
   /* =====================================================
-     ADD FAVORITE TOPIC
-  ===================================================== */
-
-  const addTopic = () => {
-    const topic = topicInput.trim();
-
-    // Don't add empty topic
-    if (!topic) return;
-
-    // Prevent duplicate topics
-    const alreadyExists = profile.favoriteTopics.some(
-      (item) => item.toLowerCase() === topic.toLowerCase()
-    );
-
-    if (alreadyExists) {
-      setTopicInput("");
-      return;
-    }
-
-    setProfile((prev) => ({
-      ...prev,
-      favoriteTopics: [
-        ...prev.favoriteTopics,
-        topic,
-      ],
-    }));
-
-    setTopicInput("");
-    setSaved(false);
-  };
-
-  /* =====================================================
-     REMOVE FAVORITE TOPIC
-  ===================================================== */
-
-  const removeTopic = (topicToRemove) => {
-    setProfile((prev) => ({
-      ...prev,
-      favoriteTopics: prev.favoriteTopics.filter(
-        (topic) => topic !== topicToRemove
-      ),
-    }));
-
-    setSaved(false);
-  };
-
-  /* =====================================================
-     ADD TOPIC WITH ENTER
-  ===================================================== */
-
-  const handleTopicKeyDown = (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      addTopic();
-    }
-  };
-
-  /* =====================================================
      SAVE PROFILE
   ===================================================== */
 
@@ -148,11 +80,11 @@ const [profile, setProfile] = useState(defaultProfile);
       Temporary local storage.
 
       Later this will be replaced with:
-      POST /api/student/profile
+      POST /api/teacher/profile
     */
 
     localStorage.setItem(
-      "studentProfile",
+      "teacherProfile",
       JSON.stringify(profile)
     );
 
@@ -175,7 +107,7 @@ const [profile, setProfile] = useState(defaultProfile);
         <div className="mx-auto max-w-5xl px-6 py-8">
 
           <Link
-            to="/student/dashboard"
+            to="/teacher/dashboard"
             className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
           >
             <ArrowLeft size={17} />
@@ -184,7 +116,7 @@ const [profile, setProfile] = useState(defaultProfile);
 
           <div className="mt-7">
 
-            <p className="text-sm font-semibold uppercase tracking-widest text-blue-400">
+            <p className="text-sm font-semibold uppercase tracking-widest text-purple-400">
               Account
             </p>
 
@@ -193,7 +125,7 @@ const [profile, setProfile] = useState(defaultProfile);
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Manage your personal information and learning details.
+              Manage your personal information and teaching details.
             </p>
 
           </div>
@@ -224,7 +156,7 @@ const [profile, setProfile] = useState(defaultProfile);
 
               <div className="relative">
 
-                <div className="flex h-28 w-28 items-center justify-center rounded-full border border-blue-500/20 bg-blue-500/10 text-blue-400">
+                <div className="flex h-28 w-28 items-center justify-center rounded-full border border-purple-500/20 bg-purple-500/10 text-purple-400">
 
                   <User
                     size={52}
@@ -245,15 +177,15 @@ const [profile, setProfile] = useState(defaultProfile);
 
 
               <h2 className="mt-5 text-xl font-semibold">
-                {profile.name || "Student"}
+                {profile.name || "Teacher"}
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                StudySphere Student
+                StudySphere Teacher
               </p>
 
-              <span className="mt-4 rounded-full bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-400">
-                Student Account
+              <span className="mt-4 rounded-full bg-purple-500/10 px-3 py-1 text-xs font-medium text-purple-400">
+                Teacher Account
               </span>
 
             </div>
@@ -271,7 +203,7 @@ const [profile, setProfile] = useState(defaultProfile);
                 />
 
                 <span className="text-slate-400">
-                  {profile.course}
+                  {profile.expertise || "Add your area of expertise"}
                 </span>
 
               </div>
@@ -286,24 +218,6 @@ const [profile, setProfile] = useState(defaultProfile);
 
                 <span className="text-slate-400">
                   {profile.location}
-                </span>
-
-              </div>
-
-
-              {/* Favorite topic count */}
-
-              <div className="mt-4 flex items-center gap-3 text-sm">
-
-                <div className="flex h-[18px] w-[18px] items-center justify-center rounded border border-slate-600 text-[10px] text-slate-500">
-                  #
-                </div>
-
-                <span className="text-slate-400">
-                  {profile.favoriteTopics.length} favorite{" "}
-                  {profile.favoriteTopics.length === 1
-                    ? "topic"
-                    : "topics"}
                 </span>
 
               </div>
@@ -408,160 +322,52 @@ const [profile, setProfile] = useState(defaultProfile);
 
 
               {/* =================================================
-                  COURSE + BRANCH
-              ================================================= */}
-
-              <div className="grid gap-5 md:grid-cols-[0.8fr_1.2fr]">
-
-                {/* Course */}
-
-                <div>
-
-                  <label
-                    htmlFor="course"
-                    className="mb-2 block text-sm font-medium text-slate-300"
-                  >
-                    Course
-                  </label>
-
-                  <input
-                    id="course"
-                    name="course"
-                    value={profile.course}
-                    onChange={handleChange}
-                    className="signup-input"
-                    placeholder="e.g. B.Tech"
-                  />
-
-                </div>
-
-
-                {/* Branch */}
-
-                <div>
-
-                  <label
-                    htmlFor="branch"
-                    className="mb-2 block text-sm font-medium text-slate-300"
-                  >
-                    Branch
-                  </label>
-
-                  <input
-                    id="branch"
-                    name="branch"
-                    value={profile.branch}
-                    onChange={handleChange}
-                    className="signup-input"
-                    placeholder="Your branch"
-                  />
-
-                </div>
-
-              </div>
-
-
-              {/* =================================================
-                  FAVORITE TOPICS
+                  EXPERTISE
               ================================================= */}
 
               <div>
 
                 <label
-                  htmlFor="favoriteTopics"
+                  htmlFor="expertise"
                   className="mb-2 block text-sm font-medium text-slate-300"
                 >
-                  Favorite Topics
+                  Area of Expertise
                 </label>
 
-                <p className="mb-3 text-xs leading-5 text-slate-500">
-                  Add subjects or topics you are interested in.
-                  These will help StudySphere recommend relevant
-                  courses for you.
-                </p>
+                <input
+                  id="expertise"
+                  name="expertise"
+                  value={profile.expertise}
+                  onChange={handleChange}
+                  className="signup-input"
+                  placeholder="e.g. Data Structures & Algorithms"
+                />
+
+              </div>
 
 
-                {/* Topic container */}
+              {/* =================================================
+                  BIO
+              ================================================= */}
 
-                <div className="rounded-xl border border-slate-700 bg-slate-950 p-3 transition-colors focus-within:border-blue-500">
+              <div>
 
+                <label
+                  htmlFor="bio"
+                  className="mb-2 block text-sm font-medium text-slate-300"
+                >
+                  Bio
+                </label>
 
-                  {/* Existing tags */}
-
-                  {profile.favoriteTopics.length > 0 && (
-
-                    <div className="flex flex-wrap gap-2">
-
-                      {profile.favoriteTopics.map((topic) => (
-
-                        <span
-                          key={topic}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-sm font-medium text-blue-400"
-                        >
-
-                          {topic}
-
-                          <button
-                            type="button"
-                            onClick={() => removeTopic(topic)}
-                            className="flex h-4 w-4 items-center justify-center rounded text-blue-400/60 transition hover:bg-blue-500/10 hover:text-blue-300"
-                            aria-label={`Remove ${topic}`}
-                          >
-                            <X size={13} />
-                          </button>
-
-                        </span>
-
-                      ))}
-
-                    </div>
-
-                  )}
-
-
-                  {/* Topic input */}
-
-                  <div
-                    className={`flex items-center gap-2 ${
-                      profile.favoriteTopics.length > 0
-                        ? "mt-2"
-                        : ""
-                    }`}
-                  >
-
-                    <input
-                      id="favoriteTopics"
-                      value={topicInput}
-                      onChange={(event) =>
-                        setTopicInput(event.target.value)
-                      }
-                      onKeyDown={handleTopicKeyDown}
-                      className="w-full bg-transparent px-1 py-2 text-sm text-white outline-none placeholder:text-slate-600"
-                      placeholder={
-                        profile.favoriteTopics.length === 0
-                          ? "e.g. DSA, React, Python..."
-                          : "Add another topic..."
-                      }
-                    />
-
-                    <button
-                      type="button"
-                      onClick={addTopic}
-                      disabled={!topicInput.trim()}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-30"
-                      aria-label="Add topic"
-                    >
-                      <Plus size={17} />
-                    </button>
-
-                  </div>
-
-                </div>
-
-
-                <p className="mt-2 text-xs text-slate-600">
-                  Press Enter or click + to add a topic.
-                </p>
+                <textarea
+                  id="bio"
+                  name="bio"
+                  value={profile.bio}
+                  onChange={handleChange}
+                  rows={4}
+                  className="signup-input !h-auto resize-none py-3"
+                  placeholder="Tell students a little about yourself..."
+                />
 
               </div>
 
@@ -614,7 +420,7 @@ const [profile, setProfile] = useState(defaultProfile);
 
                 <button
                   type="submit"
-                  className="hero-button inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-500"
+                  className="hero-button inline-flex items-center gap-2 rounded-xl bg-purple-600 px-5 py-3 font-semibold text-white hover:bg-purple-500"
                 >
 
                   <Save size={17} />
@@ -637,4 +443,4 @@ const [profile, setProfile] = useState(defaultProfile);
   );
 }
 
-export default StudentProfile;
+export default TeacherProfile;

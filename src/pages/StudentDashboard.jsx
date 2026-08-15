@@ -1,10 +1,12 @@
 import StudentNavbar from "../components/student/StudentNavbar";
 import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 
 import {
   Brain,
   Clock3,
   CheckCircle2,
+  Circle,
   Flame,
   BookOpen,
   TrendingUp,
@@ -13,7 +15,38 @@ import {
   Play,
 } from "lucide-react";
 
+import { focusApi, organizeApi } from "../lib/api";
+
+function formatDuration(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function StudentDashboard() {
+  const [focusStats, setFocusStats] = useState(null);
+  const [tasksToday, setTasksToday] = useState([]);
+  const [organizeSummary, setOrganizeSummary] = useState(null);
+
+  useEffect(() => {
+    focusApi.stats().then(setFocusStats).catch(() => {});
+    organizeApi.listTasks(todayStr()).then((res) => setTasksToday(res.tasks)).catch(() => {});
+    organizeApi.summary().then(setOrganizeSummary).catch(() => {});
+  }, []);
+
+  const weeklyCompletionPct =
+    organizeSummary && organizeSummary.weekTasksTotal > 0
+      ? Math.round((organizeSummary.weekTasksCompleted / organizeSummary.weekTasksTotal) * 100)
+      : 0;
+
   return (
     <div className="page-enter min-h-screen bg-slate-950 text-white">
 
@@ -88,7 +121,7 @@ function StudentDashboard() {
             </div>
 
             <p className="mt-4 text-3xl font-bold">
-              14
+              {focusStats ? focusStats.streakDays : "—"}
             </p>
 
             <p className="mt-2 text-sm text-blue-400">
@@ -116,7 +149,7 @@ function StudentDashboard() {
             </div>
 
             <p className="mt-4 text-3xl font-bold">
-              12h 40m
+              {focusStats ? formatDuration(focusStats.weekSeconds) : "—"}
             </p>
 
             <p className="mt-2 text-sm text-slate-500">
@@ -144,11 +177,11 @@ function StudentDashboard() {
             </div>
 
             <p className="mt-4 text-3xl font-bold">
-              24
+              {organizeSummary ? organizeSummary.tasksCompletedAllTime : "—"}
             </p>
 
             <p className="mt-2 text-sm text-emerald-400">
-              +18% this week
+              {organizeSummary ? `${organizeSummary.weekTasksCompleted} this week` : ""}
             </p>
 
           </div>
@@ -172,7 +205,7 @@ function StudentDashboard() {
             </div>
 
             <p className="mt-4 text-3xl font-bold">
-              78%
+              {organizeSummary ? `${weeklyCompletionPct}%` : "—"}
             </p>
 
             <p className="mt-2 text-sm text-purple-400">
@@ -222,82 +255,46 @@ function StudentDashboard() {
 
             <div className="mt-7 space-y-4">
 
-              {/* Completed */}
+              {tasksToday.length === 0 && (
+                <p className="rounded-2xl border border-dashed border-slate-800 bg-slate-950 p-6 text-center text-sm text-slate-600">
+                  No tasks for today yet —{" "}
+                  <Link to="/organize" className="text-blue-400 hover:text-blue-300">
+                    add one in Organize
+                  </Link>
+                  .
+                </p>
+              )}
 
-              <div className="flex items-center gap-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              {tasksToday.map((task) => (
+                <div
+                  key={task.id}
+                  className="flex items-center gap-4 rounded-2xl border border-slate-800 bg-slate-950 p-4"
+                >
 
-                <CheckCircle2
-                  size={21}
-                  className="shrink-0 text-blue-500"
-                />
+                  {task.completed ? (
+                    <CheckCircle2 size={21} className="shrink-0 text-blue-500" />
+                  ) : (
+                    <Circle size={21} className="shrink-0 text-slate-700" />
+                  )}
 
-                <div className="flex-1">
+                  <div className="flex-1">
 
-                  <p className="font-medium">
-                    Complete DSA practice
-                  </p>
+                    <p className="font-medium">
+                      {task.title}
+                    </p>
 
-                  <p className="mt-1 text-sm text-slate-500">
-                    45 minute session
-                  </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {task.durationMin} minute session
+                    </p>
 
-                </div>
+                  </div>
 
-                <span className="text-xs text-emerald-400">
-                  Done
-                </span>
-
-              </div>
-
-
-              {/* Pending */}
-
-              <div className="flex items-center gap-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-
-                <div className="h-5 w-5 rounded-md border border-slate-700" />
-
-                <div className="flex-1">
-
-                  <p className="font-medium">
-                    Revise React concepts
-                  </p>
-
-                  <p className="mt-1 text-sm text-slate-500">
-                    30 minute session
-                  </p>
+                  <span className={`text-xs ${task.completed ? "text-emerald-400" : "text-slate-500"}`}>
+                    {task.completed ? "Done" : "Pending"}
+                  </span>
 
                 </div>
-
-                <span className="text-xs text-slate-500">
-                  Pending
-                </span>
-
-              </div>
-
-
-              {/* Pending */}
-
-              <div className="flex items-center gap-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
-
-                <div className="h-5 w-5 rounded-md border border-slate-700" />
-
-                <div className="flex-1">
-
-                  <p className="font-medium">
-                    Complete focused study
-                  </p>
-
-                  <p className="mt-1 text-sm text-slate-500">
-                    60 minute session
-                  </p>
-
-                </div>
-
-                <span className="text-xs text-slate-500">
-                  Pending
-                </span>
-
-              </div>
+              ))}
 
             </div>
 
