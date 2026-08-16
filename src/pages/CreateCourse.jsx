@@ -13,6 +13,7 @@ import {
 
 import TeacherNavbar from "../components/teacher/TeacherNavbar";
 import { useAuth } from "../context/AuthContext";
+import { courseApi, ApiError } from "../lib/api";
 
 const MAX_THUMBNAIL_BYTES = 3 * 1024 * 1024; // 3MB
 
@@ -20,6 +21,8 @@ function CreateCourse() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const fileInputRef = useRef(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const [course, setCourse] = useState({
     title: "",
@@ -238,8 +241,9 @@ function CreateCourse() {
      SAVE COURSE
   ===================================================== */
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitError("");
 
     if (!course.title.trim()) {
       alert("Please enter a course title.");
@@ -276,48 +280,34 @@ function CreateCourse() {
       return;
     }
 
-    const savedCourses =
-      JSON.parse(
-        localStorage.getItem("teacherCourses")
-      ) || [];
+    setSubmitting(true);
 
-    const newCourse = {
-      id: Date.now(),
-      ...course,
-      instructor: user?.name || "StudySphere Teacher",
-      students: 0,
-      rating: 0,
-      progress: 0,
-
-      lessons: lessons.map(
-        (lesson, index) => ({
-          id: index + 1,
+    try {
+      await courseApi.create({
+        title: course.title,
+        category: course.category,
+        level: course.level,
+        description: course.description,
+        thumbnail: course.thumbnail,
+        lessons: lessons.map((lesson) => ({
           title: lesson.title,
           description: lesson.description,
-
-          // Store only the extracted YouTube ID
-          videoId: extractYouTubeVideoId(
-            lesson.videoUrl
-          ),
-
+          videoId: extractYouTubeVideoId(lesson.videoUrl),
           duration: lesson.duration,
-        })
-      ),
+        })),
+      });
 
-      createdAt: new Date().toISOString(),
-    };
-
-    localStorage.setItem(
-      "teacherCourses",
-      JSON.stringify([
-        ...savedCourses,
-        newCourse,
-      ])
-    );
-
-    alert("Course created successfully!");
-
-    navigate("/teacher/dashboard");
+      navigate("/teacher/dashboard");
+    } catch (error) {
+      setSubmitError(
+        error instanceof ApiError
+          ? error.message
+          : "Couldn't create the course. Please try again."
+      );
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

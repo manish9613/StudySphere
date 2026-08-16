@@ -12,12 +12,12 @@ import {
   Filter,
   CheckCircle2,
 } from "lucide-react";
-import { getEnrolledCourseIds } from "../lib/enrollment";
+import { courseApi } from "../lib/api";
 
 function StudentCourses() {
   const [favoriteTopics, setFavoriteTopics] = useState([]);
   const [teacherCourses, setTeacherCourses] = useState([]);
-  const [enrolledIds, setEnrolledIds] = useState(getEnrolledCourseIds());
+  const [enrolledCourses, setEnrolledCourses] = useState([]);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
 
@@ -47,67 +47,60 @@ function StudentCourses() {
 
 
   /* =====================================================
-     LOAD TEACHER COURSES
+     LOAD COURSES FROM THE BACKEND
   ===================================================== */
 
   useEffect(() => {
-    const loadTeacherCourses = () => {
-      try {
-        const savedCourses =
-          JSON.parse(
-            localStorage.getItem("teacherCourses")
-          ) || [];
+    let cancelled = false;
 
-        setTeacherCourses(
-          Array.isArray(savedCourses)
-            ? savedCourses
-            : []
-        );
-      } catch (error) {
-        console.error(
-          "Failed to load teacher courses:",
-          error
-        );
-
-        setTeacherCourses([]);
-      }
-    };
-
-    loadTeacherCourses();
-
-    /*
-      This allows the page to refresh the course list
-      if teacherCourses changes in another part of
-      the application.
-    */
-    window.addEventListener(
-      "storage",
-      loadTeacherCourses
-    );
+    courseApi
+      .list()
+      .then((data) => {
+        if (!cancelled) setTeacherCourses(Array.isArray(data.courses) ? data.courses : []);
+      })
+      .catch((error) => {
+        console.error("Failed to load courses:", error);
+        if (!cancelled) setTeacherCourses([]);
+      });
 
     return () => {
-      window.removeEventListener(
-        "storage",
-        loadTeacherCourses
-      );
+      cancelled = true;
     };
   }, []);
 
 
   /* =====================================================
-     LOAD ENROLLED COURSE IDS
+     LOAD MY ENROLLED COURSES (for enrolled flag + progress)
   ===================================================== */
 
   useEffect(() => {
-    const loadEnrolledIds = () => {
-      setEnrolledIds(getEnrolledCourseIds());
+    let cancelled = false;
+
+    courseApi
+      .myEnrolledCourses()
+      .then((data) => {
+        if (!cancelled) setEnrolledCourses(Array.isArray(data.courses) ? data.courses : []);
+      })
+      .catch((error) => {
+        console.error("Failed to load enrolled courses:", error);
+        if (!cancelled) setEnrolledCourses([]);
+      });
+
+    return () => {
+      cancelled = true;
     };
-
-    loadEnrolledIds();
-
-    window.addEventListener("storage", loadEnrolledIds);
-    return () => window.removeEventListener("storage", loadEnrolledIds);
   }, []);
+
+  const enrolledIds = useMemo(
+    () => enrolledCourses.map((course) => String(course.id)),
+    [enrolledCourses]
+  );
+
+  const enrolledById = useMemo(() => {
+    const map = new Map();
+    enrolledCourses.forEach((course) => map.set(String(course.id), course));
+    return map;
+  }, [enrolledCourses]);
 
 
   /* =====================================================
@@ -270,16 +263,16 @@ function StudentCourses() {
         "Learn this course on StudySphere.",
 
       students:
-        course.students || 0,
+        course.enrolledCount || 0,
 
       rating:
         course.rating || 0,
 
       progress:
-        course.progress || 0,
+        enrolledById.get(String(course.id))?.progressPct || 0,
 
-      // Only actually-enrolled courses (tracked in enrolledCourseIds) show
-      // up as enrolled — not whatever the teacher happened to save on the
+      // Only actually-enrolled courses (from the backend) show up as
+      // enrolled — not whatever the teacher happened to save on the
       // course record itself.
       enrolled:
         enrolledIds.includes(String(course.id)),
@@ -293,7 +286,7 @@ function StudentCourses() {
 
       isTeacherCourse: true,
     }));
-  }, [teacherCourses, enrolledIds]);
+  }, [teacherCourses, enrolledIds, enrolledById]);
 
 
   /* =====================================================

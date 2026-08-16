@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 function TeacherSignup() {
@@ -228,15 +229,17 @@ function TeacherSignup() {
                       placeholder="Create password"
                       minLength="8"
                       required
-                      className="signup-input pr-16"
+                      className="signup-input signup-input-with-toggle"
                     />
 
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 hover:text-slate-300"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-slate-300"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      tabIndex={-1}
                     >
-                      {showPassword ? "Hide" : "Show"}
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
 
                   </div>
@@ -260,7 +263,7 @@ function TeacherSignup() {
                       onChange={handleChange}
                       placeholder="Confirm password"
                       required
-                      className="signup-input pr-16"
+                      className="signup-input signup-input-with-toggle"
                     />
 
                     <button
@@ -268,9 +271,11 @@ function TeacherSignup() {
                       onClick={() =>
                         setShowConfirmPassword(!showConfirmPassword)
                       }
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 hover:text-slate-300"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 transition hover:text-slate-300"
+                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                      tabIndex={-1}
                     >
-                      {showConfirmPassword ? "Hide" : "Show"}
+                      {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
 
                   </div>

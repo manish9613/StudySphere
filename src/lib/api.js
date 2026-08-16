@@ -50,6 +50,8 @@ export const authApi = {
   login: (payload) => request("/api/auth/login", { method: "POST", body: payload }),
   logout: () => request("/api/auth/logout", { method: "POST" }),
   me: () => request("/api/auth/me"),
+  forgotPassword: (payload) => request("/api/auth/forgot-password", { method: "POST", body: payload }),
+  resetPassword: (payload) => request("/api/auth/reset-password", { method: "POST", body: payload }),
 };
 
 // Focus sessions: every logged session is stored per-user, per-day on the
@@ -74,4 +76,28 @@ export const organizeApi = {
   deleteTask: (id) => request(`/api/organize/tasks/${id}`, { method: "DELETE" }),
 
   summary: () => request("/api/organize/summary"),
+};
+
+// Courses: created by a teacher (with lessons), browsed/enrolled by
+// students, and backed by the real database — not localStorage.
+export const courseApi = {
+  list: () => request("/api/courses"),
+  get: (id) => request(`/api/courses/${id}`),
+  create: (payload) => request("/api/courses", { method: "POST", body: payload }),
+  update: (id, payload) => request(`/api/courses/${id}`, { method: "PUT", body: payload }),
+  delete: (id) => request(`/api/courses/${id}`, { method: "DELETE" }),
+  enroll: (id) => request(`/api/courses/${id}/enroll`, { method: "POST" }),
+  submitLessonTask: (courseId, lessonId, payload) =>
+    request(`/api/courses/${courseId}/lessons/${lessonId}/submit`, { method: "POST", body: payload }),
+
+  // Teacher's own courses + the "Students" section of the teacher dashboard.
+  myCourses: () => request("/api/teacher/courses"),
+  allStudents: () => request("/api/teacher/students"),
+  courseStudents: (courseId) => request(`/api/teacher/courses/${courseId}/students`),
+  evaluateSubmission: (submissionId, payload) =>
+    request(`/api/submissions/${submissionId}/evaluate`, { method: "POST", body: payload }),
+
+  // Student's enrolled courses, each with per-lesson lock/remark status.
+  myEnrolledCourses: () => request("/api/student/courses"),
+  myEnrolledCourse: (courseId) => request(`/api/student/courses/${courseId}`),
 };

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   BookOpen,
@@ -13,17 +14,35 @@ import {
 } from "lucide-react";
 
 import TeacherNavbar from "../components/teacher/TeacherNavbar";
+import { useAuth } from "../context/AuthContext";
+import { courseApi } from "../lib/api";
 
 function TeacherDashboard() {
-  const savedCourses =
-    JSON.parse(localStorage.getItem("teacherCourses")) || [];
+  const { user } = useAuth();
 
-  const publishedCourses = savedCourses.filter(
-    (course) => course.status !== "draft"
-  );
+  const [savedCourses, setSavedCourses] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    courseApi
+      .myCourses()
+      .then((data) => {
+        if (!cancelled) setSavedCourses(data.courses || []);
+      })
+      .catch(() => {
+        if (!cancelled) setSavedCourses([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  const publishedCourses = savedCourses;
 
   const totalStudents = savedCourses.reduce(
-    (total, course) => total + (course.students || 0),
+    (total, course) => total + (course.enrolledCount || 0),
     0
   );
 

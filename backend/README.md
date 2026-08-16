@@ -98,6 +98,34 @@ for `CORS_ORIGIN` with `credentials: true`.
 - `200` → `{ "user": {...} }` if a valid session cookie is present
 - `401` → not authenticated
 
+### `POST /api/auth/forgot-password`
+
+```json
+{ "email": "ada@example.com" }
+```
+
+- `200` → always, regardless of whether the email is registered (so this
+  endpoint can't be used to check who has an account):
+  `{ "message": "..." }`
+- Sends the reset email through [Resend](https://resend.com) using
+  Node's built-in `fetch` (no email SDK dependency). Set `RESEND_API_KEY`
+  in `backend/.env` to enable real sending — see `.env.example`. Without
+  a key, the link is logged to the server console instead, and the API
+  response includes `devResetUrl` so the flow is still testable locally.
+- Reset tokens expire after 30 minutes and are single-use; requesting a
+  new one invalidates any link sent earlier.
+
+### `POST /api/auth/reset-password`
+
+```json
+{ "token": "...", "password": "at-least-8-characters" }
+```
+
+- `200` → `{ "user": {...} }`, sets a session cookie (the user is signed
+  in immediately)
+- `400` → token missing, invalid, expired, or already used
+- `422` → password too short
+
 ### `GET /api/health`
 
 - `200` → `{ "status": "ok" }` — useful for uptime checks

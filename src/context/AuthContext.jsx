@@ -61,6 +61,27 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const forgotPassword = async (email) => {
+    try {
+      const data = await authApi.forgotPassword({ email });
+      return { success: true, message: data?.message, devResetUrl: data?.devResetUrl };
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Something went wrong.";
+      return { success: false, error: message };
+    }
+  };
+
+  const resetPassword = async (token, password) => {
+    try {
+      const { user: loggedInUser } = await authApi.resetPassword({ token, password });
+      setUser(loggedInUser);
+      return { success: true, user: loggedInUser };
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Could not reset password.";
+      return { success: false, error: message };
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -68,6 +89,8 @@ export function AuthProvider({ children }) {
         login,
         signup,
         logout,
+        forgotPassword,
+        resetPassword,
         loading,
         isAuthenticated: !!user,
       }}

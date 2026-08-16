@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
     ArrowRight,
@@ -10,43 +10,61 @@ import {
     Users,
     Edit3,
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { courseApi } from "../lib/api";
 
 function TeacherCourses() {
-    const [courses, setCourses] = useState(() => {
-        try {
-            return JSON.parse(
-                localStorage.getItem("teacherCourses")
-            ) || [];
-        } catch {
-            return [];
-        }
-    });
+    const { user } = useAuth();
+
+    const [courses, setCourses] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        courseApi
+            .myCourses()
+            .then((data) => {
+                if (!cancelled) setCourses(data.courses || []);
+            })
+            .catch(() => {
+                if (!cancelled) setCourses([]);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [user?.id]);
 
     const [openMenu, setOpenMenu] = useState(null);
+    const [deleting, setDeleting] = useState(null);
 
     /* =====================================================
        DELETE COURSE
     ===================================================== */
 
-    const handleDelete = (courseId) => {
+    const handleDelete = async (courseId) => {
         const confirmed = window.confirm(
             "Are you sure you want to delete this course?"
         );
 
         if (!confirmed) return;
 
-        const updatedCourses = courses.filter(
-            (course) => course.id !== courseId
-        );
-
-        setCourses(updatedCourses);
-
-        localStorage.setItem(
-            "teacherCourses",
-            JSON.stringify(updatedCourses)
-        );
-
+        setDeleting(courseId);
         setOpenMenu(null);
+
+        try {
+            await courseApi.delete(courseId);
+            setCourses((prev) => prev.filter((course) => course.id !== courseId));
+        } catch (error) {
+            console.error("Failed to delete course:", error);
+            alert("Couldn't delete this course. Please try again.");
+        } finally {
+            setDeleting(null);
+        }
     };
 
     /* =====================================================
@@ -142,7 +160,7 @@ function TeacherCourses() {
                         <p className="mt-2 text-3xl font-bold">
                             {courses.reduce(
                                 (total, course) =>
-                                    total + (course.students || 0),
+                                    total + (course.enrolledCount || 0),
                                 0
                             )}
                         </p>
@@ -157,6 +175,14 @@ function TeacherCourses() {
         ================================================= */}
 
                 {courses.length === 0 ? (
+
+                    loading ? (
+
+                        <div className="mt-8 rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 px-6 py-16 text-center text-sm text-slate-500">
+                            Loading your courses…
+                        </div>
+
+                    ) : (
 
                     <div className="mt-8 rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 px-6 py-16 text-center">
 
@@ -183,6 +209,8 @@ function TeacherCourses() {
                         </Link>
 
                     </div>
+
+                    )
 
                 ) : (
 
@@ -242,7 +270,7 @@ function TeacherCourses() {
 
                                             <span className="flex items-center gap-1.5">
                                                 <Users size={13} />
-                                                {course.students || 0} students
+                                                {course.enrolledCount || 0} students
                                             </span>
 
                                             {course.level && (
@@ -259,6 +287,14 @@ function TeacherCourses() {
                                     {/* Actions */}
 
                                     <div className="flex items-center gap-2">
+
+                                        <Link
+                                            to={`/teacher/courses/${course.id}/students`}
+                                            className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-5 py-3 text-sm font-semibold text-slate-300 transition hover:border-purple-500/40 hover:bg-slate-900 hover:text-white"
+                                        >
+                                            <Users size={16} />
+                                            Students
+                                        </Link>
 
                                         <Link
                                             to={`/teacher/courses/${course.id}/manage`}
@@ -310,10 +346,11 @@ function TeacherCourses() {
                                                         onClick={() =>
                                                             handleDelete(course.id)
                                                         }
-                                                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-red-400 transition hover:bg-red-500/10"
+                                                        disabled={deleting === course.id}
+                                                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
                                                     >
                                                         <Trash2 size={16} />
-                                                        Delete Course
+                                                        {deleting === course.id ? "Deleting…" : "Delete Course"}
                                                     </button>
 
                                                 </div>

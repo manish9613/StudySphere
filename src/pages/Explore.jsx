@@ -10,6 +10,7 @@ import {
   Filter,
   GraduationCap,
 } from "lucide-react";
+import { courseApi } from "../lib/api";
 
 function Explore() {
   const [teacherCourses, setTeacherCourses] = useState([]);
@@ -17,27 +18,25 @@ function Explore() {
   const [selectedSubject, setSelectedSubject] = useState("All");
 
   /* =====================================================
-     LOAD TEACHER-UPLOADED COURSES
+     LOAD COURSES FROM THE BACKEND
   ===================================================== */
 
   useEffect(() => {
-    const loadTeacherCourses = () => {
-      try {
-        const savedCourses =
-          JSON.parse(localStorage.getItem("teacherCourses")) || [];
+    let cancelled = false;
 
-        setTeacherCourses(Array.isArray(savedCourses) ? savedCourses : []);
-      } catch (error) {
-        console.error("Failed to load teacher courses:", error);
-        setTeacherCourses([]);
-      }
+    courseApi
+      .list()
+      .then((data) => {
+        if (!cancelled) setTeacherCourses(Array.isArray(data.courses) ? data.courses : []);
+      })
+      .catch((error) => {
+        console.error("Failed to load courses:", error);
+        if (!cancelled) setTeacherCourses([]);
+      });
+
+    return () => {
+      cancelled = true;
     };
-
-    loadTeacherCourses();
-
-    // Keep the list fresh if a teacher publishes a course in another tab.
-    window.addEventListener("storage", loadTeacherCourses);
-    return () => window.removeEventListener("storage", loadTeacherCourses);
   }, []);
 
   /* =====================================================
@@ -51,7 +50,7 @@ function Explore() {
       category: course.category || "General",
       level: course.level || "Beginner",
       description: course.description || "Learn this course on StudySphere.",
-      students: course.students || 0,
+      students: course.enrolledCount || 0,
       rating: course.rating || 0,
       color: course.color || "purple",
       lessonsCount: Array.isArray(course.lessons) ? course.lessons.length : 0,

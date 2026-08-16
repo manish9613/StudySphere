@@ -28,6 +28,28 @@ db.exec(`
 `);
 
 /* =====================================================
+   PASSWORD RESETS
+   One row per "forgot password" request. We never store the raw
+   token — only its SHA-256 hash — so a database leak alone can't be
+   used to reset anyone's password. Tokens expire and are single-use.
+===================================================== */
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS password_resets (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    used_at    TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets (user_id);
+`);
+
+/* =====================================================
    FOCUS SESSIONS
    One row per completed/stopped focus session. Stats
    (today, this week, all-time, streak, day-by-day
@@ -90,6 +112,102 @@ db.exec(`
 `);
 
 /* =====================================================
+   COURSES + LESSONS
+   A course belongs to one teacher and holds an ordered
+   list of lessons. Each lesson has an implicit "task":
+   the student must upload a PDF (a submission) and have
+   it approved by the teacher before the next lesson
+   unlocks.
+===================================================== */
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS courses (
+    id          TEXT PRIMARY KEY,
+    teacher_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    title       TEXT NOT NULL,
+    category    TEXT,
+    level       TEXT,
+    description TEXT,
+    thumbnail   TEXT,
+    instructor  TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_courses_teacher ON courses (teacher_id);
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS lessons (
+    id          TEXT PRIMARY KEY,
+    course_id   TEXT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+    position    INTEGER NOT NULL,
+    title       TEXT NOT NULL,
+    description TEXT,
+    video_id    TEXT,
+    duration    TEXT
+  );
+`);
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_lessons_course ON lessons (course_id, position);
+`);
+
+/* =====================================================
+   ENROLLMENTS
+   Ties a student to a course. This is the teacher <->
+   student relationship: every enrollment row is one
+   student the teacher can see and manage in the
+   "Students" section of their dashboard.
+===================================================== */
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS enrollments (
+    id          TEXT PRIMARY KEY,
+    course_id   TEXT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+    student_id  TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    enrolled_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (course_id, student_id)
+  );
+`);
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollments (course_id);
+  CREATE INDEX IF NOT EXISTS idx_enrollments_student ON enrollments (student_id);
+`);
+
+/* =====================================================
+   SUBMISSIONS
+   One row per (lesson, student) — the PDF a student
+   uploads on a lesson's task-completion section. The
+   teacher evaluates it (approve/reject + a remark). An
+   approved submission is what unlocks the next lesson,
+   and the remark is what shows up in the student's
+   course "lesson remarks" view.
+===================================================== */
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS submissions (
+    id            TEXT PRIMARY KEY,
+    lesson_id     TEXT NOT NULL REFERENCES lessons (id) ON DELETE CASCADE,
+    course_id     TEXT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+    student_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    file_name     TEXT NOT NULL,
+    file_data     TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'approved', 'rejected')),
+    remark        TEXT,
+    submitted_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    evaluated_at  TEXT,
+    UNIQUE (lesson_id, student_id)
+  );
+`);
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_submissions_course_student ON submissions (course_id, student_id);
+`);
+
+/* =====================================================
    QUERIES
 ===================================================== */
 
@@ -131,6 +249,55 @@ function toPublicUser(row) {
     bio: row.bio ?? undefined,
     createdAt: row.created_at,
   };
+}
+
+const updatePasswordStmt = db.prepare(`
+  UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?
+`);
+
+function updateUserPassword(userId, passwordHash, passwordSalt) {
+  updatePasswordStmt.run(passwordHash, passwordSalt, userId);
+}
+
+/* =====================================================
+   PASSWORD RESET QUERIES
+===================================================== */
+
+const insertPasswordResetStmt = db.prepare(`
+  INSERT INTO password_resets (id, user_id, token_hash, expires_at)
+  VALUES (?, ?, ?, ?)
+`);
+
+const findValidPasswordResetStmt = db.prepare(`
+  SELECT * FROM password_resets
+  WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now')
+`);
+
+const markPasswordResetUsedStmt = db.prepare(`
+  UPDATE password_resets SET used_at = datetime('now') WHERE id = ?
+`);
+
+const invalidateUserPasswordResetsStmt = db.prepare(`
+  UPDATE password_resets SET used_at = datetime('now')
+  WHERE user_id = ? AND used_at IS NULL
+`);
+
+function createPasswordReset({ id, userId, tokenHash, expiresAt }) {
+  insertPasswordResetStmt.run(id, userId, tokenHash, expiresAt);
+}
+
+function findValidPasswordReset(tokenHash) {
+  return findValidPasswordResetStmt.get(tokenHash) ?? null;
+}
+
+function markPasswordResetUsed(id) {
+  markPasswordResetUsedStmt.run(id);
+}
+
+/** Called before issuing a fresh reset token so a user can never have
+ *  more than one live reset link outstanding at a time. */
+function invalidateUserPasswordResets(userId) {
+  invalidateUserPasswordResetsStmt.run(userId);
 }
 
 /* =====================================================
@@ -285,12 +452,239 @@ function getTaskCountsSince(userId, sinceDate) {
   return taskCountsSinceStmt.all(userId, sinceDate);
 }
 
+/* =====================================================
+   COURSE + LESSON QUERIES
+===================================================== */
+
+const insertCourseStmt = db.prepare(`
+  INSERT INTO courses (id, teacher_id, title, category, level, description, thumbnail, instructor)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`);
+
+const updateCourseStmt = db.prepare(`
+  UPDATE courses SET title = ?, category = ?, level = ?, description = ?, thumbnail = ?
+  WHERE id = ? AND teacher_id = ?
+`);
+
+const allCoursesStmt = db.prepare(`
+  SELECT * FROM courses ORDER BY created_at DESC
+`);
+
+const coursesByTeacherStmt = db.prepare(`
+  SELECT * FROM courses WHERE teacher_id = ? ORDER BY created_at DESC
+`);
+
+const courseByIdStmt = db.prepare(`
+  SELECT * FROM courses WHERE id = ?
+`);
+
+const insertLessonStmt = db.prepare(`
+  INSERT INTO lessons (id, course_id, position, title, description, video_id, duration)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`);
+
+const lessonsForCourseStmt = db.prepare(`
+  SELECT * FROM lessons WHERE course_id = ? ORDER BY position ASC
+`);
+
+const lessonByIdStmt = db.prepare(`
+  SELECT * FROM lessons WHERE id = ? AND course_id = ?
+`);
+
+const deleteLessonsForCourseStmt = db.prepare(`
+  DELETE FROM lessons WHERE course_id = ?
+`);
+
+const deleteCourseStmt = db.prepare(`
+  DELETE FROM courses WHERE id = ? AND teacher_id = ?
+`);
+
+function createCourse({ id, teacherId, title, category, level, description, thumbnail, instructor }) {
+  insertCourseStmt.run(id, teacherId, title, category ?? null, level ?? null, description ?? null, thumbnail ?? null, instructor ?? null);
+}
+
+function updateCourseRow(id, teacherId, { title, category, level, description, thumbnail }) {
+  return updateCourseStmt.run(title, category ?? null, level ?? null, description ?? null, thumbnail ?? null, id, teacherId).changes > 0;
+}
+
+function getAllCourses() {
+  return allCoursesStmt.all();
+}
+
+function getCoursesByTeacher(teacherId) {
+  return coursesByTeacherStmt.all(teacherId);
+}
+
+function getCourseById(id) {
+  return courseByIdStmt.get(id) ?? null;
+}
+
+function createLesson({ id, courseId, position, title, description, videoId, duration }) {
+  insertLessonStmt.run(id, courseId, position, title, description ?? null, videoId ?? null, duration ?? null);
+}
+
+function getLessonsForCourse(courseId) {
+  return lessonsForCourseStmt.all(courseId);
+}
+
+function getLessonById(id, courseId) {
+  return lessonByIdStmt.get(id, courseId) ?? null;
+}
+
+function replaceLessonsForCourse(courseId, lessons) {
+  deleteLessonsForCourseStmt.run(courseId);
+  lessons.forEach((lesson, index) => {
+    createLesson({ ...lesson, courseId, position: index });
+  });
+}
+
+function deleteCourse(id, teacherId) {
+  return deleteCourseStmt.run(id, teacherId).changes > 0;
+}
+
+/* =====================================================
+   ENROLLMENT QUERIES
+===================================================== */
+
+const insertEnrollmentStmt = db.prepare(`
+  INSERT OR IGNORE INTO enrollments (id, course_id, student_id)
+  VALUES (?, ?, ?)
+`);
+
+const enrollmentStmt = db.prepare(`
+  SELECT * FROM enrollments WHERE course_id = ? AND student_id = ?
+`);
+
+const enrollmentsForStudentStmt = db.prepare(`
+  SELECT * FROM enrollments WHERE student_id = ? ORDER BY enrolled_at DESC
+`);
+
+const enrollmentsForCourseStmt = db.prepare(`
+  SELECT e.*, u.name AS student_name, u.email AS student_email
+  FROM enrollments e
+  JOIN users u ON u.id = e.student_id
+  WHERE e.course_id = ?
+  ORDER BY e.enrolled_at DESC
+`);
+
+const enrollmentCountForCourseStmt = db.prepare(`
+  SELECT COUNT(*) AS count FROM enrollments WHERE course_id = ?
+`);
+
+const enrollmentsForTeacherStmt = db.prepare(`
+  SELECT e.*, u.name AS student_name, u.email AS student_email,
+         c.title AS course_title, c.id AS course_id
+  FROM enrollments e
+  JOIN users u ON u.id = e.student_id
+  JOIN courses c ON c.id = e.course_id
+  WHERE c.teacher_id = ?
+  ORDER BY e.enrolled_at DESC
+`);
+
+function createEnrollment({ id, courseId, studentId }) {
+  insertEnrollmentStmt.run(id, courseId, studentId);
+}
+
+function getEnrollment(courseId, studentId) {
+  return enrollmentStmt.get(courseId, studentId) ?? null;
+}
+
+function getEnrollmentsForStudent(studentId) {
+  return enrollmentsForStudentStmt.all(studentId);
+}
+
+function getEnrollmentsForCourse(courseId) {
+  return enrollmentsForCourseStmt.all(courseId);
+}
+
+function getEnrollmentCountForCourse(courseId) {
+  return enrollmentCountForCourseStmt.get(courseId).count;
+}
+
+function getEnrollmentsForTeacher(teacherId) {
+  return enrollmentsForTeacherStmt.all(teacherId);
+}
+
+/* =====================================================
+   SUBMISSION QUERIES
+===================================================== */
+
+const insertSubmissionStmt = db.prepare(`
+  INSERT INTO submissions (id, lesson_id, course_id, student_id, file_name, file_data, status, remark, submitted_at, evaluated_at)
+  VALUES (?, ?, ?, ?, ?, ?, 'submitted', NULL, datetime('now'), NULL)
+  ON CONFLICT (lesson_id, student_id) DO UPDATE SET
+    file_name = excluded.file_name,
+    file_data = excluded.file_data,
+    status = 'submitted',
+    remark = NULL,
+    submitted_at = datetime('now'),
+    evaluated_at = NULL
+`);
+
+const submissionStmt = db.prepare(`
+  SELECT * FROM submissions WHERE lesson_id = ? AND student_id = ?
+`);
+
+const submissionByIdStmt = db.prepare(`
+  SELECT * FROM submissions WHERE id = ?
+`);
+
+const submissionsForCourseStudentStmt = db.prepare(`
+  SELECT * FROM submissions WHERE course_id = ? AND student_id = ?
+`);
+
+const submissionsForCourseStmt = db.prepare(`
+  SELECT s.*, u.name AS student_name, u.email AS student_email,
+         l.title AS lesson_title, l.position AS lesson_position
+  FROM submissions s
+  JOIN users u ON u.id = s.student_id
+  JOIN lessons l ON l.id = s.lesson_id
+  WHERE s.course_id = ?
+  ORDER BY s.submitted_at DESC
+`);
+
+const evaluateSubmissionStmt = db.prepare(`
+  UPDATE submissions SET status = ?, remark = ?, evaluated_at = datetime('now')
+  WHERE id = ?
+`);
+
+function upsertSubmission({ id, lessonId, courseId, studentId, fileName, fileData }) {
+  insertSubmissionStmt.run(id, lessonId, courseId, studentId, fileName, fileData);
+  return submissionStmt.get(lessonId, studentId);
+}
+
+function getSubmission(lessonId, studentId) {
+  return submissionStmt.get(lessonId, studentId) ?? null;
+}
+
+function getSubmissionById(id) {
+  return submissionByIdStmt.get(id) ?? null;
+}
+
+function getSubmissionsForCourseStudent(courseId, studentId) {
+  return submissionsForCourseStudentStmt.all(courseId, studentId);
+}
+
+function getSubmissionsForCourse(courseId) {
+  return submissionsForCourseStmt.all(courseId);
+}
+
+function evaluateSubmission(id, status, remark) {
+  return evaluateSubmissionStmt.run(status, remark ?? null, id).changes > 0;
+}
+
 module.exports = {
   db,
   createUser,
   findUserByEmail,
   findUserById,
   toPublicUser,
+  updateUserPassword,
+
+  createPasswordReset,
+  findValidPasswordReset,
+  markPasswordResetUsed,
+  invalidateUserPasswordResets,
 
   createFocusSession,
   getFocusHistorySince,
@@ -310,4 +704,29 @@ module.exports = {
   deleteTask,
   getCompletedTasksCount,
   getTaskCountsSince,
+
+  createCourse,
+  updateCourseRow,
+  getAllCourses,
+  getCoursesByTeacher,
+  getCourseById,
+  createLesson,
+  getLessonsForCourse,
+  getLessonById,
+  replaceLessonsForCourse,
+  deleteCourse,
+
+  createEnrollment,
+  getEnrollment,
+  getEnrollmentsForStudent,
+  getEnrollmentsForCourse,
+  getEnrollmentCountForCourse,
+  getEnrollmentsForTeacher,
+
+  upsertSubmission,
+  getSubmission,
+  getSubmissionById,
+  getSubmissionsForCourseStudent,
+  getSubmissionsForCourse,
+  evaluateSubmission,
 };

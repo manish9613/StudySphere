@@ -10,6 +10,8 @@ import Explore from "./pages/Explore";
 import ExploreCourseDetails from "./pages/ExploreCourseDetails";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Community from "./pages/Community";
 import Focus from "./pages/Focus";
 import AIMentor from "./pages/AIMentor";
@@ -30,6 +32,8 @@ import Lesson from "./pages/Lesson";
 import CreateCourse from "./pages/CreateCourse";
 import TeacherCourses from "./pages/TeacherCourses";
 import ManageCourse from "./pages/ManageCourse";
+import TeacherStudents from "./pages/TeacherStudents";
+import TeacherCourseStudents from "./pages/TeacherCourseStudents";
 import TeacherProfile from "./pages/TeacherProfile";
 import ComingSoon from "./pages/ComingSoon";
 function App() {
@@ -88,6 +92,16 @@ function App() {
       <Route
         path="/login"
         element={<Login />}
+      />
+
+      <Route
+        path="/forgot-password"
+        element={<ForgotPassword />}
+      />
+
+      <Route
+        path="/reset-password"
+        element={<ResetPassword />}
       />
 
       <Route
@@ -283,6 +297,24 @@ function App() {
         element={
           <ProtectedRoute role="teacher">
             <ManageCourse />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/teacher/students"
+        element={
+          <ProtectedRoute role="teacher">
+            <TeacherStudents />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/teacher/courses/:courseId/students"
+        element={
+          <ProtectedRoute role="teacher">
+            <TeacherCourseStudents />
           </ProtectedRoute>
         }
       />

@@ -10,83 +10,74 @@ import {
   Save,
   ExternalLink,
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { courseApi, ApiError } from "../lib/api";
 
 function ManageCourse() {
   const { courseId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   /* =====================================================
      LOAD COURSE
   ===================================================== */
 
   useEffect(() => {
-    try {
-      const savedCourses =
-        JSON.parse(
-          localStorage.getItem("teacherCourses")
-        ) || [];
+    let cancelled = false;
+    setLoading(true);
 
-      const foundCourse = savedCourses.find(
-        (item) =>
-          String(item.id) === String(courseId)
-      );
+    courseApi
+      .get(courseId)
+      .then((data) => {
+        if (cancelled) return;
 
-      if (!foundCourse) {
-        setCourse(null);
-        setLoading(false);
-        return;
-      }
+        const foundCourse = data.course;
 
-      setCourse({
-        ...foundCourse,
-        lessons: Array.isArray(
-          foundCourse.lessons
-        )
-          ? foundCourse.lessons.map(
-              (lesson, index) => ({
+        // Don't let a teacher manage a course that belongs to a
+        // different teacher account.
+        if (!foundCourse || foundCourse.teacherId !== user?.id) {
+          setCourse(null);
+          setLoadError("");
+          return;
+        }
+
+        setCourse({
+          ...foundCourse,
+          lessons: Array.isArray(foundCourse.lessons)
+            ? foundCourse.lessons.map((lesson, index) => ({
                 ...lesson,
-
-                id:
-                  lesson.id ??
-                  index + 1,
-
-                title:
-                  lesson.title || "",
-
-                description:
-                  lesson.description || "",
-
-                duration:
-                  lesson.duration || "",
-
-                videoId:
-                  lesson.videoId || "",
-
-                materials:
-                  Array.isArray(
-                    lesson.materials
-                  )
-                    ? lesson.materials
-                    : [],
-              })
-            )
-          : [],
+                id: lesson.id ?? index + 1,
+                title: lesson.title || "",
+                description: lesson.description || "",
+                duration: lesson.duration || "",
+                videoId: lesson.videoId || "",
+                videoUrl: lesson.videoId
+                  ? `https://www.youtube.com/watch?v=${lesson.videoId}`
+                  : "",
+                materials: Array.isArray(lesson.materials) ? lesson.materials : [],
+              }))
+            : [],
+        });
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setCourse(null);
+          setLoadError(error instanceof ApiError ? error.message : "Couldn't load this course.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
 
-      setLoading(false);
-    } catch (error) {
-      console.error(
-        "Failed to load course:",
-        error
-      );
-
-      setCourse(null);
-      setLoading(false);
-    }
-  }, [courseId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId, user?.id]);
 
 
   /* =====================================================
@@ -363,7 +354,7 @@ function ManageCourse() {
      SAVE CHANGES
   ===================================================== */
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!course) return;
 
     /* Validate lessons */
@@ -435,45 +426,42 @@ function ManageCourse() {
         }
       );
 
+    setSaving(true);
 
-    const updatedCourse = {
-      ...course,
-      lessons: updatedLessons,
-      updatedAt:
-        new Date().toISOString(),
-    };
+    try {
+      const { course: savedCourse } = await courseApi.update(courseId, {
+        title: course.title,
+        category: course.category,
+        level: course.level,
+        description: course.description,
+        thumbnail: course.thumbnail,
+        lessons: updatedLessons.map((lesson) => ({
+          title: lesson.title,
+          description: lesson.description,
+          videoId: lesson.videoId,
+          duration: lesson.duration,
+        })),
+      });
 
+      setCourse({
+        ...savedCourse,
+        lessons: savedCourse.lessons.map((lesson, index) => ({
+          ...lesson,
+          videoUrl: lesson.videoId ? `https://www.youtube.com/watch?v=${lesson.videoId}` : "",
+          materials: updatedLessons[index]?.materials || [],
+        })),
+      });
 
-    /* Update localStorage */
-
-    const savedCourses =
-      JSON.parse(
-        localStorage.getItem(
-          "teacherCourses"
-        )
-      ) || [];
-
-    const updatedCourses =
-      savedCourses.map(
-        (item) =>
-          String(item.id) ===
-          String(courseId)
-            ? updatedCourse
-            : item
+      alert("Course updated successfully!");
+    } catch (error) {
+      alert(
+        error instanceof ApiError
+          ? error.message
+          : "Couldn't save this course. Please try again."
       );
-
-    localStorage.setItem(
-      "teacherCourses",
-      JSON.stringify(
-        updatedCourses
-      )
-    );
-
-    setCourse(updatedCourse);
-
-    alert(
-      "Course updated successfully!"
-    );
+    } finally {
+      setSaving(false);
+    }
   };
 
 
@@ -563,10 +551,11 @@ function ManageCourse() {
           <button
             type="button"
             onClick={handleSave}
-            className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-500"
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:opacity-50"
           >
             <Save size={17} />
-            Save Changes
+            {saving ? "Saving…" : "Save Changes"}
           </button>
 
         </div>
@@ -1288,10 +1277,11 @@ function ManageCourse() {
           <button
             type="button"
             onClick={handleSave}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-purple-500"
+            disabled={saving}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-purple-500 disabled:opacity-50"
           >
             <Save size={17} />
-            Save Changes
+            {saving ? "Saving…" : "Save Changes"}
           </button>
 
         </div>

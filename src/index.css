@@ -690,6 +690,11 @@ h1, h2, h3, h4, h5, h6 {
   padding-left: 2.75rem !important;
 }
 
+/* Password inputs with a show/hide eye toggle button */
+.signup-input-with-toggle {
+  padding-right: 2.75rem !important;
+}
+
 .signup-input::placeholder {
   color: #475569;
 }

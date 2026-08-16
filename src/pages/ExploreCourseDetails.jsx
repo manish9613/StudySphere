@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -12,55 +12,33 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { getEnrolledCourseIds, enrollInCourse } from "../lib/enrollment";
+import { courseApi, ApiError } from "../lib/api";
 
 function ExploreCourseDetails() {
   const { courseId } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
 
-  const [teacherCourses, setTeacherCourses] = useState([]);
-  const [enrolledIds, setEnrolledIds] = useState(getEnrolledCourseIds());
+  const [course, setCourse] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
+  const [enrollError, setEnrollError] = useState("");
+
+  const loadCourse = () => {
+    courseApi
+      .get(courseId)
+      .then((data) => setCourse(data.course))
+      .catch(() => setCourse(null))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("teacherCourses")) || [];
-      setTeacherCourses(Array.isArray(saved) ? saved : []);
-    } catch (error) {
-      console.error("Failed to load teacher courses:", error);
-      setTeacherCourses([]);
-    }
-  }, []);
+    setLoading(true);
+    loadCourse();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId]);
 
-  const course = useMemo(() => {
-    const found = teacherCourses.find(
-      (item) => String(item.id) === String(courseId)
-    );
-
-    if (!found) return null;
-
-    return {
-      ...found,
-      instructor: found.instructor || "StudySphere Teacher",
-      category: found.category || "General",
-      level: found.level || "Beginner",
-      description: found.description || "Learn this course on StudySphere.",
-      students: found.students || 0,
-      rating: found.rating || 0,
-      color: found.color || "purple",
-      lessons: Array.isArray(found.lessons)
-        ? found.lessons.map((lesson, index) => ({
-            ...lesson,
-            id: lesson.id ?? index + 1,
-            title: lesson.title || `Lesson ${index + 1}`,
-            duration: lesson.duration || "Video lesson",
-          }))
-        : [],
-    };
-  }, [teacherCourses, courseId]);
-
-  const isEnrolled = enrolledIds.includes(String(courseId));
+  const isEnrolled = !!course?.enrolled;
   const isStudent = !isAuthenticated || user?.role === "student";
 
   const getGradient = (color) => {
@@ -82,7 +60,7 @@ function ExploreCourseDetails() {
      ENROLL
   ===================================================== */
 
-  const handleEnroll = () => {
+  const handleEnroll = async () => {
     if (!isAuthenticated) {
       navigate("/login", { state: { from: `/explore/${courseId}` } });
       return;
@@ -96,25 +74,30 @@ function ExploreCourseDetails() {
     }
 
     setEnrolling(true);
+    setEnrollError("");
 
     try {
-      const next = enrollInCourse(courseId);
-      setEnrolledIds(next);
-
-      // Bump the course's student count so it's reflected across the app.
-      const updatedCourses = teacherCourses.map((item) =>
-        String(item.id) === String(courseId)
-          ? { ...item, students: (Number(item.students) || 0) + 1 }
-          : item
-      );
-      localStorage.setItem("teacherCourses", JSON.stringify(updatedCourses));
-      setTeacherCourses(updatedCourses);
+      await courseApi.enroll(courseId);
+      navigate(`/student/courses/${courseId}`);
     } catch (error) {
-      console.error("Failed to save enrollment:", error);
+      setEnrolling(false);
+      setEnrollError(
+        error instanceof ApiError ? error.message : "Couldn't enroll. Please try again."
+      );
     }
-
-    navigate(`/student/courses/${courseId}`);
   };
+
+  /* =====================================================
+     LOADING
+  ===================================================== */
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
+        <p className="text-sm text-slate-500">Loading course…</p>
+      </div>
+    );
+  }
 
   /* =====================================================
      NOT FOUND
@@ -206,7 +189,7 @@ function ExploreCourseDetails() {
 
                 <span className="flex items-center gap-2">
                   <Users size={16} />
-                  {course.students || 0} students
+                  {course.enrolledCount || 0} students
                 </span>
 
                 <span className="flex items-center gap-2">
@@ -289,6 +272,10 @@ function ExploreCourseDetails() {
                     </>
                   )}
                 </button>
+
+                {enrollError && (
+                  <p className="mt-3 text-xs text-red-400">{enrollError}</p>
+                )}
               </div>
             </div>
           </div>
