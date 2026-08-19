@@ -106,16 +106,16 @@ function CourseDetails() {
   const lessonProgress = Array.isArray(course.lessonProgress) ? course.lessonProgress : [];
   const progressById = new Map(lessonProgress.map((p) => [p.lessonId, p]));
 
-  const approvedCount = lessonProgress.filter((p) => p.status === "approved").length;
-  const progress = course.progressPct ?? (lessons.length ? Math.round((approvedCount / lessons.length) * 100) : 0);
+  const completedCount = lessonProgress.filter((p) => p.completed).length;
+  const progress = course.progressPct ?? (lessons.length ? Math.round((completedCount / lessons.length) * 100) : 0);
   const hasLessons = lessons.length > 0;
 
-  // The lesson the student should jump to next: the first one that isn't
-  // locked and hasn't already been approved.
+  // The lesson the student should jump to next: the first one they
+  // haven't marked complete yet.
   const nextLesson =
     lessons.find((lesson) => {
       const p = progressById.get(lesson.id);
-      return p && !p.locked && p.status !== "approved";
+      return p && !p.completed;
     }) || lessons[0] || null;
 
   return (
@@ -176,9 +176,16 @@ function CourseDetails() {
             </div>
 
             <div
-              className={`overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br ${getGradient(course.color)} to-slate-950`}
+              className={`relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br ${getGradient(course.color)} to-slate-950`}
             >
-              <div className="flex h-48 items-center justify-center">
+              {course.thumbnail && (
+                <img
+                  src={course.thumbnail}
+                  alt=""
+                  className="absolute inset-0 h-48 w-full object-cover opacity-40"
+                />
+              )}
+              <div className="relative flex h-48 items-center justify-center">
                 <div className="flex h-20 w-20 items-center justify-center rounded-3xl border border-white/10 bg-slate-950/60 text-white/80 backdrop-blur">
                   <BookOpen size={38} strokeWidth={1.5} />
                 </div>
@@ -222,7 +229,7 @@ function CourseDetails() {
           <p className="text-sm font-semibold uppercase tracking-widest text-blue-400">Curriculum</p>
           <h2 className="mt-2 text-2xl font-bold">Course Lessons</h2>
           <p className="mt-2 text-sm text-slate-500">
-            {approvedCount} of {lessons.length} lessons completed
+            {completedCount} of {lessons.length} lessons completed
           </p>
         </div>
 
@@ -245,7 +252,7 @@ function CourseDetails() {
             {lessons.map((lesson, index) => {
               const p = progressById.get(lesson.id) || { locked: index > 0, status: "pending" };
               const isLocked = p.locked;
-              const isApproved = p.status === "approved";
+              const isApproved = p.completed;
               const isRejected = p.status === "rejected";
               const isSubmitted = p.status === "submitted";
 

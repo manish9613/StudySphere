@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 import TeacherNavbar from "../components/teacher/TeacherNavbar";
-import { courseApi, ApiError } from "../lib/api";
+import { courseApi, ApiError, openBase64Pdf } from "../lib/api";
 
 const STATUS_STYLES = {
   locked: { label: "Locked", className: "bg-slate-800 text-slate-500", icon: Lock },
@@ -84,13 +84,7 @@ function TeacherCourseStudents() {
     }
   };
 
-  const openPdf = (fileName, fileData) => {
-    const win = window.open("about:blank");
-    if (win) {
-      win.document.title = fileName || "Submission";
-      win.location.href = `data:application/pdf;base64,${fileData}`;
-    }
-  };
+  const openPdf = (fileName, fileData) => openBase64Pdf(fileName, fileData);
 
   return (
     <div className="page-enter min-h-screen bg-slate-950 text-white">

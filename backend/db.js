@@ -3,6 +3,7 @@
 // backend needs zero third-party dependencies — no `npm install` required.
 
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { DatabaseSync } = require("node:sqlite");
 
 const DB_PATH = path.join(__dirname, "studysphere.db");
@@ -205,6 +206,58 @@ db.exec(`
 
 db.exec(`
   CREATE INDEX IF NOT EXISTS idx_submissions_course_student ON submissions (course_id, student_id);
+`);
+
+/* =====================================================
+   LESSON TASKS ("DPPs")
+   A task the TEACHER attaches to a lesson: a title, some
+   instructions, and (optionally) a real PDF of the
+   assignment itself. Completely separate from whether a
+   student has submitted their answer — a lesson task never
+   blocks moving on to the next lesson, it just shows up in
+   the student's Tasks section until they deal with it.
+===================================================== */
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS lesson_tasks (
+    id           TEXT PRIMARY KEY,
+    lesson_id    TEXT NOT NULL UNIQUE REFERENCES lessons (id) ON DELETE CASCADE,
+    course_id    TEXT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+    teacher_id   TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    title        TEXT NOT NULL,
+    instructions TEXT,
+    file_name    TEXT,
+    file_data    TEXT,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at   TEXT
+  );
+`);
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_lesson_tasks_course ON lesson_tasks (course_id);
+`);
+
+/* =====================================================
+   LESSON COMPLETIONS
+   A student marking a lesson as "done" — this is what
+   course progress (%) is based on. Completely independent
+   from lesson task submissions/approval, so watching/
+   finishing a lesson is never gated behind a teacher's review.
+===================================================== */
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS lesson_completions (
+    id           TEXT PRIMARY KEY,
+    lesson_id    TEXT NOT NULL REFERENCES lessons (id) ON DELETE CASCADE,
+    course_id    TEXT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+    student_id   TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    completed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (lesson_id, student_id)
+  );
+`);
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_lesson_completions_course_student ON lesson_completions (course_id, student_id);
 `);
 
 /* =====================================================
@@ -495,6 +548,15 @@ const deleteLessonsForCourseStmt = db.prepare(`
   DELETE FROM lessons WHERE course_id = ?
 `);
 
+const deleteLessonByIdStmt = db.prepare(`
+  DELETE FROM lessons WHERE id = ? AND course_id = ?
+`);
+
+const updateLessonRowStmt = db.prepare(`
+  UPDATE lessons SET position = ?, title = ?, description = ?, video_id = ?, duration = ?
+  WHERE id = ? AND course_id = ?
+`);
+
 const deleteCourseStmt = db.prepare(`
   DELETE FROM courses WHERE id = ? AND teacher_id = ?
 `);
@@ -531,11 +593,35 @@ function getLessonById(id, courseId) {
   return lessonByIdStmt.get(id, courseId) ?? null;
 }
 
+/** Saves a course's lesson list without needlessly destroying lesson
+ *  rows. Any incoming lesson whose id matches a lesson that already
+ *  belongs to this course is UPDATED in place (keeping its id, and
+ *  with it, any lesson task / submissions / completions tied to that
+ *  id). Lessons with no id, or an id that doesn't belong to this
+ *  course, are inserted as new rows. Any existing lesson that isn't
+ *  present in the incoming list is removed (and its dependent rows
+ *  cascade away with it) — that's the only case data is dropped, and
+ *  it only happens when the teacher actually deleted that lesson. */
 function replaceLessonsForCourse(courseId, lessons) {
-  deleteLessonsForCourseStmt.run(courseId);
+  const existingIds = new Set(getLessonsForCourse(courseId).map((l) => l.id));
+  const keepIds = new Set();
+
   lessons.forEach((lesson, index) => {
-    createLesson({ ...lesson, courseId, position: index });
+    const id = lesson.id && existingIds.has(lesson.id) ? lesson.id : crypto.randomUUID();
+    keepIds.add(id);
+
+    if (existingIds.has(id)) {
+      updateLessonRowStmt.run(index, lesson.title, lesson.description ?? null, lesson.videoId ?? null, lesson.duration ?? null, id, courseId);
+    } else {
+      insertLessonStmt.run(id, courseId, index, lesson.title, lesson.description ?? null, lesson.videoId ?? null, lesson.duration ?? null);
+    }
   });
+
+  for (const existingId of existingIds) {
+    if (!keepIds.has(existingId)) {
+      deleteLessonByIdStmt.run(existingId, courseId);
+    }
+  }
 }
 
 function deleteCourse(id, teacherId) {
@@ -673,6 +759,79 @@ function evaluateSubmission(id, status, remark) {
   return evaluateSubmissionStmt.run(status, remark ?? null, id).changes > 0;
 }
 
+/* =====================================================
+   LESSON TASK QUERIES
+===================================================== */
+
+const upsertLessonTaskStmt = db.prepare(`
+  INSERT INTO lesson_tasks (id, lesson_id, course_id, teacher_id, title, instructions, file_name, file_data, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  ON CONFLICT (lesson_id) DO UPDATE SET
+    title = excluded.title,
+    instructions = excluded.instructions,
+    file_name = COALESCE(excluded.file_name, lesson_tasks.file_name),
+    file_data = COALESCE(excluded.file_data, lesson_tasks.file_data),
+    updated_at = datetime('now')
+`);
+
+const lessonTaskByLessonStmt = db.prepare(`
+  SELECT * FROM lesson_tasks WHERE lesson_id = ?
+`);
+
+const lessonTasksForCourseStmt = db.prepare(`
+  SELECT * FROM lesson_tasks WHERE course_id = ?
+`);
+
+const deleteLessonTaskStmt = db.prepare(`
+  DELETE FROM lesson_tasks WHERE lesson_id = ? AND course_id = ? AND teacher_id = ?
+`);
+
+function upsertLessonTask({ id, lessonId, courseId, teacherId, title, instructions, fileName, fileData }) {
+  upsertLessonTaskStmt.run(id, lessonId, courseId, teacherId, title, instructions ?? null, fileName ?? null, fileData ?? null);
+  return lessonTaskByLessonStmt.get(lessonId);
+}
+
+function getLessonTaskByLesson(lessonId) {
+  return lessonTaskByLessonStmt.get(lessonId) ?? null;
+}
+
+function getLessonTasksForCourse(courseId) {
+  return lessonTasksForCourseStmt.all(courseId);
+}
+
+function deleteLessonTask(lessonId, courseId, teacherId) {
+  return deleteLessonTaskStmt.run(lessonId, courseId, teacherId).changes > 0;
+}
+
+/* =====================================================
+   LESSON COMPLETION QUERIES
+===================================================== */
+
+const insertLessonCompletionStmt = db.prepare(`
+  INSERT OR IGNORE INTO lesson_completions (id, lesson_id, course_id, student_id)
+  VALUES (?, ?, ?, ?)
+`);
+
+const deleteLessonCompletionStmt = db.prepare(`
+  DELETE FROM lesson_completions WHERE lesson_id = ? AND student_id = ?
+`);
+
+const lessonCompletionsForCourseStudentStmt = db.prepare(`
+  SELECT * FROM lesson_completions WHERE course_id = ? AND student_id = ?
+`);
+
+function setLessonCompleted(lessonId, courseId, studentId, completed) {
+  if (completed) {
+    insertLessonCompletionStmt.run(crypto.randomUUID(), lessonId, courseId, studentId);
+  } else {
+    deleteLessonCompletionStmt.run(lessonId, studentId);
+  }
+}
+
+function getLessonCompletionsForCourseStudent(courseId, studentId) {
+  return lessonCompletionsForCourseStudentStmt.all(courseId, studentId);
+}
+
 module.exports = {
   db,
   createUser,
@@ -729,4 +888,12 @@ module.exports = {
   getSubmissionsForCourseStudent,
   getSubmissionsForCourse,
   evaluateSubmission,
+
+  upsertLessonTask,
+  getLessonTaskByLesson,
+  getLessonTasksForCourse,
+  deleteLessonTask,
+
+  setLessonCompleted,
+  getLessonCompletionsForCourseStudent,
 };

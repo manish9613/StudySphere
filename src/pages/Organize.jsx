@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookOpen, CheckCircle2, Plus, Trash2 } from "lucide-react";
+import { BookOpen, CheckCircle2, Pause, Play, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 import { organizeApi } from "../lib/api";
 
@@ -13,6 +13,13 @@ const SUBJECT_ICONS = ["📘", "💻", "⚛️", "🗄️", "⚙️", "🧪", "�
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function formatClock(totalSeconds) {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
 function Organize() {
@@ -29,6 +36,10 @@ function Organize() {
   const [newTaskPriority, setNewTaskPriority] = useState("medium");
   const [newTaskDuration, setNewTaskDuration] = useState(30);
   const [addingTask, setAddingTask] = useState(false);
+
+  // Exact countdown timer per to-do item: { [taskId]: { secondsLeft, running } }.
+  // Lives only in this tab's memory — it's a study aid, not a stored record.
+  const [timers, setTimers] = useState({});
 
   const today = todayStr();
 
@@ -52,6 +63,58 @@ function Organize() {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Single shared ticker for every running timer — precise to the second.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimers((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [taskId, t] of Object.entries(prev)) {
+          if (!t.running) continue;
+          changed = true;
+          if (t.secondsLeft <= 1) {
+            next[taskId] = { ...t, secondsLeft: 0, running: false, justFinished: true };
+          } else {
+            next[taskId] = { ...t, secondsLeft: t.secondsLeft - 1 };
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // When a timer hits zero, mark the task complete automatically.
+  useEffect(() => {
+    Object.entries(timers).forEach(([taskId, t]) => {
+      if (t.secondsLeft === 0 && t.justFinished) {
+        setTimers((prev) => ({ ...prev, [taskId]: { ...prev[taskId], justFinished: false } }));
+        const task = tasks.find((tk) => String(tk.id) === String(taskId));
+        if (task && !task.completed) handleToggleTask(task);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timers]);
+
+  const startTimer = (task) => {
+    setTimers((prev) => {
+      const existing = prev[task.id];
+      const secondsLeft = existing && existing.secondsLeft > 0 ? existing.secondsLeft : (task.durationMin || 30) * 60;
+      return { ...prev, [task.id]: { secondsLeft, running: true, justFinished: false } };
+    });
+  };
+
+  const pauseTimer = (taskId) => {
+    setTimers((prev) => (prev[taskId] ? { ...prev, [taskId]: { ...prev[taskId], running: false } } : prev));
+  };
+
+  const resetTimer = (task) => {
+    setTimers((prev) => ({
+      ...prev,
+      [task.id]: { secondsLeft: (task.durationMin || 30) * 60, running: false, justFinished: false },
+    }));
+  };
 
   const handleAddSubject = async (e) => {
     e.preventDefault();
@@ -378,10 +441,16 @@ function Organize() {
                 </p>
               )}
 
-              {tasks.map((task) => (
+              {tasks.map((task) => {
+                const timer = timers[task.id];
+                const secondsLeft = timer?.secondsLeft ?? (task.durationMin || 30) * 60;
+                const isRunning = !!timer?.running;
+                const isDone = secondsLeft === 0;
+
+                return (
                 <div
                   key={task.id}
-                  className="group flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4"
+                  className="group flex flex-wrap items-center gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4"
                 >
 
                   <input
@@ -401,6 +470,47 @@ function Organize() {
                     </p>
                   </div>
 
+                  {/* Exact countdown timer */}
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`font-mono text-sm tabular-nums ${
+                        isDone ? "text-emerald-400" : isRunning ? "text-blue-400" : "text-slate-400"
+                      }`}
+                    >
+                      {formatClock(secondsLeft)}
+                    </span>
+
+                    {isRunning ? (
+                      <button
+                        type="button"
+                        onClick={() => pauseTimer(task.id)}
+                        aria-label={`Pause timer for ${task.title}`}
+                        className="rounded-lg border border-slate-800 p-1.5 text-slate-400 transition hover:border-blue-500/40 hover:text-blue-400"
+                      >
+                        <Pause size={14} />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => startTimer(task)}
+                        disabled={isDone}
+                        aria-label={`Start timer for ${task.title}`}
+                        className="rounded-lg border border-slate-800 p-1.5 text-slate-400 transition hover:border-blue-500/40 hover:text-blue-400 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <Play size={14} />
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => resetTimer(task)}
+                      aria-label={`Reset timer for ${task.title}`}
+                      className="rounded-lg border border-slate-800 p-1.5 text-slate-500 transition hover:border-slate-600 hover:text-slate-300"
+                    >
+                      <RotateCcw size={14} />
+                    </button>
+                  </div>
+
                   <span className={`rounded-full px-3 py-1 text-xs ${PRIORITY_STYLES[task.priority]}`}>
                     {task.priority[0].toUpperCase() + task.priority.slice(1)}
                   </span>
@@ -415,7 +525,8 @@ function Organize() {
                   </button>
 
                 </div>
-              ))}
+                );
+              })}
 
             </div>
 

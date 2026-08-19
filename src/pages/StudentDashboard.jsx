@@ -1,21 +1,40 @@
 import StudentNavbar from "../components/student/StudentNavbar";
 import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   Brain,
   Clock3,
   CheckCircle2,
   Circle,
+  ClipboardList,
   Flame,
   BookOpen,
   TrendingUp,
   Users,
   ArrowRight,
+  ExternalLink,
   Play,
+  UploadCloud,
 } from "lucide-react";
 
-import { focusApi, organizeApi } from "../lib/api";
+import { focusApi, organizeApi, courseApi, openBase64Pdf, ApiError } from "../lib/api";
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.onerror = () => reject(new Error("Couldn't read that file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+const TASK_STATUS_META = {
+  pending: { label: "Not started", className: "bg-slate-800 text-slate-500" },
+  submitted: { label: "Awaiting review", className: "bg-amber-500/10 text-amber-400" },
+  approved: { label: "Approved", className: "bg-emerald-500/10 text-emerald-400" },
+  rejected: { label: "Changes requested", className: "bg-red-500/10 text-red-400" },
+};
 
 function formatDuration(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds || 0));
@@ -36,11 +55,79 @@ function StudentDashboard() {
   const [tasksToday, setTasksToday] = useState([]);
   const [organizeSummary, setOrganizeSummary] = useState(null);
 
+  const [courseTasks, setCourseTasks] = useState([]);
+  const [courseTasksLoading, setCourseTasksLoading] = useState(true);
+  // Per-task submission drafts, keyed by `${courseId}:${lessonId}`.
+  const [taskSubmitDrafts, setTaskSubmitDrafts] = useState({});
+  const fileInputsRef = useRef({});
+
+  const loadCourseTasks = () => {
+    setCourseTasksLoading(true);
+    courseApi
+      .studentTasks()
+      .then((res) => setCourseTasks(res.tasks || []))
+      .catch(() => {})
+      .finally(() => setCourseTasksLoading(false));
+  };
+
   useEffect(() => {
     focusApi.stats().then(setFocusStats).catch(() => {});
     organizeApi.listTasks(todayStr()).then((res) => setTasksToday(res.tasks)).catch(() => {});
     organizeApi.summary().then(setOrganizeSummary).catch(() => {});
+    loadCourseTasks();
   }, []);
+
+  const setTaskDraft = (key, patch) => {
+    setTaskSubmitDrafts((prev) => ({ ...prev, [key]: { ...(prev[key] || {}), ...patch } }));
+  };
+
+  const handleTaskFilePick = (key, e) => {
+    const file = e.target.files?.[0] || null;
+    if (file && file.type !== "application/pdf") {
+      setTaskDraft(key, { error: "Only PDF files can be submitted." });
+      return;
+    }
+    setTaskDraft(key, { file, error: "" });
+  };
+
+  const submitCourseTask = async (item) => {
+    const key = `${item.courseId}:${item.lessonId}`;
+    const draft = taskSubmitDrafts[key] || {};
+    if (!draft.file) {
+      setTaskDraft(key, { error: "Choose a PDF file first." });
+      return;
+    }
+
+    setTaskDraft(key, { submitting: true, error: "" });
+    try {
+      const fileData = await readFileAsBase64(draft.file);
+      await courseApi.submitLessonTask(item.courseId, item.lessonId, {
+        fileName: draft.file.name,
+        fileData,
+      });
+      setTaskDraft(key, { submitting: false, file: null, error: "" });
+      if (fileInputsRef.current[key]) fileInputsRef.current[key].value = "";
+      loadCourseTasks();
+    } catch (err) {
+      setTaskDraft(key, {
+        submitting: false,
+        error: err instanceof ApiError ? err.message : "Couldn't submit that file.",
+      });
+    }
+  };
+
+  const viewTaskPdf = async (item) => {
+    try {
+      const { task } = await courseApi.getLessonTask(item.courseId, item.lessonId);
+      if (task?.fileData) openBase64Pdf(task.fileName, task.fileData);
+    } catch {
+      // ignore — nothing to view
+    }
+  };
+
+  const openCourseTasks = courseTasks.filter(
+    (t) => t.submissionStatus === "pending" || t.submissionStatus === "rejected"
+  );
 
   const weeklyCompletionPct =
     organizeSummary && organizeSummary.weekTasksTotal > 0
@@ -346,6 +433,125 @@ function StudentDashboard() {
               />
             </Link>
 
+          </div>
+
+        </div>
+
+
+        {/* =====================================================
+            COURSE TASKS (DPPs assigned by teachers)
+            Never gated on lesson order — every task a teacher has
+            assigned shows up here the moment it exists, and stays
+            here until it's submitted. Complete it right from this
+            panel; the PDF goes straight to the teacher.
+        ===================================================== */}
+
+        <div className="dashboard-card mt-6 rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400">
+                <ClipboardList size={22} />
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">TASKS</p>
+                <h2 className="font-semibold">Course Tasks</h2>
+              </div>
+            </div>
+            {openCourseTasks.length > 0 && (
+              <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
+                {openCourseTasks.length} open
+              </span>
+            )}
+          </div>
+
+          <div className="mt-6 space-y-4">
+            {courseTasksLoading ? (
+              <p className="rounded-2xl border border-dashed border-slate-800 bg-slate-950 p-6 text-center text-sm text-slate-600">
+                Loading tasks…
+              </p>
+            ) : courseTasks.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-slate-800 bg-slate-950 p-6 text-center text-sm text-slate-600">
+                No tasks assigned yet. When a teacher adds one to a lesson, it'll show up here.
+              </p>
+            ) : (
+              courseTasks.map((item) => {
+                const key = `${item.courseId}:${item.lessonId}`;
+                const draft = taskSubmitDrafts[key] || {};
+                const meta = TASK_STATUS_META[item.submissionStatus] || TASK_STATUS_META.pending;
+                const isOpen = item.submissionStatus === "pending" || item.submissionStatus === "rejected";
+
+                return (
+                  <div key={key} className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-xs text-slate-600">
+                          {item.courseTitle} · Lesson {item.lessonPosition + 1}
+                        </p>
+                        <p className="mt-0.5 font-medium text-slate-200">{item.task.title}</p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${meta.className}`}>
+                        {meta.label}
+                      </span>
+                    </div>
+
+                    {item.task.instructions && (
+                      <p className="mt-2 text-sm text-slate-500">{item.task.instructions}</p>
+                    )}
+
+                    {item.task.hasFile && (
+                      <button
+                        type="button"
+                        onClick={() => viewTaskPdf(item)}
+                        className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300"
+                      >
+                        <ExternalLink size={13} />
+                        View {item.task.fileName || "assignment PDF"}
+                      </button>
+                    )}
+
+                    {item.submissionStatus === "rejected" && item.remark && (
+                      <p className="mt-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-400">
+                        {item.remark}
+                      </p>
+                    )}
+
+                    {item.submissionStatus === "approved" && item.remark && (
+                      <p className="mt-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-400">
+                        {item.remark}
+                      </p>
+                    )}
+
+                    {isOpen && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <label className="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-dashed border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-400 transition hover:border-emerald-500/40">
+                          <UploadCloud size={14} className="shrink-0 text-emerald-400" />
+                          <span className="min-w-0 flex-1 truncate">
+                            {draft.file?.name || "Choose a PDF to submit"}
+                          </span>
+                          <input
+                            ref={(el) => (fileInputsRef.current[key] = el)}
+                            type="file"
+                            accept="application/pdf"
+                            onChange={(e) => handleTaskFilePick(key, e)}
+                            className="hidden"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => submitCourseTask(item)}
+                          disabled={draft.submitting || !draft.file}
+                          className="shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {draft.submitting ? "Sending…" : "Send to teacher"}
+                        </button>
+                      </div>
+                    )}
+                    {draft.error && <p className="mt-2 text-xs text-red-400">{draft.error}</p>}
+                  </div>
+                );
+              })
+            )}
           </div>
 
         </div>

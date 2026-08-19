@@ -89,6 +89,20 @@ export const courseApi = {
   enroll: (id) => request(`/api/courses/${id}/enroll`, { method: "POST" }),
   submitLessonTask: (courseId, lessonId, payload) =>
     request(`/api/courses/${courseId}/lessons/${lessonId}/submit`, { method: "POST", body: payload }),
+  // Marking a lesson "done" is independent of the task/submission flow —
+  // this is what drives the course progress bar.
+  completeLesson: (courseId, lessonId, completed = true) =>
+    request(`/api/courses/${courseId}/lessons/${lessonId}/complete`, { method: "POST", body: { completed } }),
+
+  // Teacher-authored lesson task ("DPP"): a title/instructions and an
+  // optional real PDF attachment, saved per lesson.
+  saveLessonTask: (courseId, lessonId, payload) =>
+    request(`/api/courses/${courseId}/lessons/${lessonId}/task`, { method: "PUT", body: payload }),
+  deleteLessonTask: (courseId, lessonId) =>
+    request(`/api/courses/${courseId}/lessons/${lessonId}/task`, { method: "DELETE" }),
+  // Includes the actual PDF bytes (fileData) — only fetch this when the
+  // file is actually about to be viewed/downloaded.
+  getLessonTask: (courseId, lessonId) => request(`/api/courses/${courseId}/lessons/${lessonId}/task`),
 
   // Teacher's own courses + the "Students" section of the teacher dashboard.
   myCourses: () => request("/api/teacher/courses"),
@@ -100,4 +114,33 @@ export const courseApi = {
   // Student's enrolled courses, each with per-lesson lock/remark status.
   myEnrolledCourses: () => request("/api/student/courses"),
   myEnrolledCourse: (courseId) => request(`/api/student/courses/${courseId}`),
+  // Every lesson task ("DPP") across every enrolled course, with this
+  // student's own submission status — powers the dashboard Tasks section.
+  studentTasks: () => request("/api/student/tasks"),
 };
+
+/** Turns a base64 PDF payload into a same-tab-safe Blob URL and opens it.
+ *  Browsers block navigating a new tab straight to a `data:` URL, so this
+ *  is the one safe way to let someone view/download a submitted or
+ *  assigned PDF. Caller should revoke the URL when done if reused often. */
+export function openBase64Pdf(fileName, base64Data) {
+  if (!base64Data) return;
+  const byteChars = atob(base64Data);
+  const byteNumbers = new Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i += 1) {
+    byteNumbers[i] = byteChars.charCodeAt(i);
+  }
+  const blob = new Blob([new Uint8Array(byteNumbers)], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, "_blank");
+  if (!win) {
+    // Popup blocked — fall back to a download so the file isn't lost.
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName || "document.pdf";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}

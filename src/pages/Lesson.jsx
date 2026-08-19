@@ -7,7 +7,10 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Circle,
+  ClipboardList,
   Clock3,
+  ExternalLink,
   FileText,
   List,
   Lock,
@@ -15,7 +18,7 @@ import {
   XCircle,
 } from "lucide-react";
 
-import { courseApi, ApiError } from "../lib/api";
+import { courseApi, ApiError, openBase64Pdf } from "../lib/api";
 
 const STATUS_META = {
   locked: { label: "Locked", className: "bg-slate-800 text-slate-500" },
@@ -46,6 +49,8 @@ function Lesson() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [completing, setCompleting] = useState(false);
+  const [taskPdfLoading, setTaskPdfLoading] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -204,6 +209,30 @@ function Lesson() {
     }
   };
 
+  const toggleComplete = async () => {
+    setCompleting(true);
+    try {
+      await courseApi.completeLesson(courseId, currentLesson.id, !currentProgress.completed);
+      load();
+    } catch {
+      // Non-critical — just let them try again.
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const viewTaskPdf = async () => {
+    setTaskPdfLoading(true);
+    try {
+      const { task } = await courseApi.getLessonTask(courseId, currentLesson.id);
+      if (task?.fileData) openBase64Pdf(task.fileName, task.fileData);
+    } catch {
+      // Nothing to view / not accessible — ignore.
+    } finally {
+      setTaskPdfLoading(false);
+    }
+  };
+
   return (
     <div className="page-enter min-h-screen bg-slate-950 text-white">
       {/* TOP BAR */}
@@ -275,6 +304,56 @@ function Lesson() {
               <p className="mt-4 max-w-3xl text-base leading-7 text-slate-400">{currentLesson.description}</p>
 
               {/* =================================================
+                  MARK LESSON COMPLETE
+                  Drives the course progress bar. Independent of the
+                  task/submission review below — watching a lesson is
+                  never gated behind a teacher's approval.
+              ================================================= */}
+              <button
+                type="button"
+                onClick={toggleComplete}
+                disabled={completing}
+                className={`mt-6 inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                  currentProgress.completed
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                    : "border-slate-700 bg-slate-900 text-slate-300 hover:border-blue-500/40 hover:text-white"
+                }`}
+              >
+                {currentProgress.completed ? <CheckCircle2 size={17} /> : <Circle size={17} />}
+                {completing
+                  ? "Updating…"
+                  : currentProgress.completed
+                  ? "Lesson completed"
+                  : "Mark lesson as complete"}
+              </button>
+
+              {/* =================================================
+                  TEACHER'S TASK (DPP), IF ONE WAS ASSIGNED
+              ================================================= */}
+              {currentLesson.task && (
+                <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-6">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList size={18} className="text-emerald-400" />
+                    <h2 className="font-semibold text-emerald-400">{currentLesson.task.title}</h2>
+                  </div>
+                  {currentLesson.task.instructions && (
+                    <p className="mt-2 text-sm leading-6 text-slate-400">{currentLesson.task.instructions}</p>
+                  )}
+                  {currentLesson.task.hasFile && (
+                    <button
+                      type="button"
+                      onClick={viewTaskPdf}
+                      disabled={taskPdfLoading}
+                      className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300 disabled:opacity-60"
+                    >
+                      <ExternalLink size={13} />
+                      {taskPdfLoading ? "Opening…" : `View ${currentLesson.task.fileName || "assignment PDF"}`}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* =================================================
                   TASK COMPLETION SECTION
                   Every lesson's task: upload a PDF, teacher reviews it.
               ================================================= */}
@@ -284,8 +363,9 @@ function Lesson() {
                   <h2 className="font-semibold">Lesson Task</h2>
                 </div>
                 <p className="mt-1.5 text-sm text-slate-500">
-                  Upload a PDF for this lesson's task. Your teacher will review it — once
-                  approved, the next lesson unlocks.
+                  Upload a PDF for this lesson's task whenever you're ready — it's sent straight
+                  to your teacher for review. You can move on to the next lesson any time; this
+                  is never a gate.
                 </p>
 
                 {status === "approved" && (
@@ -424,7 +504,7 @@ function Lesson() {
               {lessons.map((lesson, index) => {
                 const isCurrent = String(lesson.id) === String(currentLesson.id);
                 const p = progressById.get(lesson.id) || { locked: index > 0, status: "pending" };
-                const isApproved = p.status === "approved";
+                const isApproved = p.completed;
                 const isLocked = p.locked;
 
                 return (

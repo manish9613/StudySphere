@@ -9,9 +9,20 @@ import {
   FileText,
   Save,
   ExternalLink,
+  ClipboardList,
+  UploadCloud,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { courseApi, ApiError } from "../lib/api";
+import { courseApi, ApiError, openBase64Pdf } from "../lib/api";
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.onerror = () => reject(new Error("Couldn't read that file."));
+    reader.readAsDataURL(file);
+  });
+}
 
 function ManageCourse() {
   const { courseId } = useParams();
@@ -22,6 +33,11 @@ function ManageCourse() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Per-lesson DPP/task editor drafts, keyed by lesson id: { title,
+  // instructions, file, saving, error }. Separate from `course` state so
+  // typing in a task field never touches the lesson-save flow.
+  const [taskDrafts, setTaskDrafts] = useState({});
 
   /* =====================================================
      LOAD COURSE
@@ -62,6 +78,22 @@ function ManageCourse() {
                 materials: Array.isArray(lesson.materials) ? lesson.materials : [],
               }))
             : [],
+        });
+
+        setTaskDrafts((prev) => {
+          const next = { ...prev };
+          (foundCourse.lessons || []).forEach((lesson) => {
+            if (next[lesson.id]) return; // don't clobber an in-progress edit
+            next[lesson.id] = {
+              title: lesson.task?.title || "",
+              instructions: lesson.task?.instructions || "",
+              fileName: lesson.task?.fileName || "",
+              file: null,
+              saving: false,
+              error: "",
+            };
+          });
+          return next;
         });
       })
       .catch((error) => {
@@ -351,8 +383,97 @@ function ManageCourse() {
 
 
   /* =====================================================
-     SAVE CHANGES
+     LESSON TASK ("DPP") — separate from Notes/materials.
+     Only lessons with a real (string) id — i.e. already saved at
+     least once — can have a task attached, since the task is stored
+     against the lesson's server-side row.
   ===================================================== */
+
+  const updateTaskDraft = (lessonId, patch) => {
+    setTaskDrafts((prev) => ({
+      ...prev,
+      [lessonId]: { ...(prev[lessonId] || { title: "", instructions: "", fileName: "" }), ...patch },
+    }));
+  };
+
+  const handleTaskFileChange = (lessonId, e) => {
+    const file = e.target.files?.[0] || null;
+    if (file && file.type !== "application/pdf") {
+      updateTaskDraft(lessonId, { error: "The task attachment must be a PDF." });
+      return;
+    }
+    updateTaskDraft(lessonId, { file, error: "" });
+  };
+
+  const saveLessonTask = async (lessonId) => {
+    const draft = taskDrafts[lessonId] || {};
+    const title = (draft.title || "").trim();
+
+    if (!title) {
+      updateTaskDraft(lessonId, { error: "Give the task a title first." });
+      return;
+    }
+
+    updateTaskDraft(lessonId, { saving: true, error: "" });
+
+    try {
+      let fileName = draft.fileName || undefined;
+      let fileData;
+      if (draft.file) {
+        fileData = await readFileAsBase64(draft.file);
+        fileName = draft.file.name;
+      }
+
+      const { task } = await courseApi.saveLessonTask(courseId, lessonId, {
+        title,
+        instructions: draft.instructions || "",
+        ...(fileData ? { fileName, fileData } : {}),
+      });
+
+      updateTaskDraft(lessonId, {
+        saving: false,
+        file: null,
+        fileName: task.fileName || fileName || "",
+      });
+
+      setCourse((prev) => ({
+        ...prev,
+        lessons: prev.lessons.map((l) => (l.id === lessonId ? { ...l, task } : l)),
+      }));
+    } catch (error) {
+      updateTaskDraft(lessonId, {
+        saving: false,
+        error: error instanceof ApiError ? error.message : "Couldn't save this task.",
+      });
+    }
+  };
+
+  const removeLessonTask = async (lessonId) => {
+    const confirmed = window.confirm("Remove this lesson's task? Students will no longer see it.");
+    if (!confirmed) return;
+
+    try {
+      await courseApi.deleteLessonTask(courseId, lessonId);
+      updateTaskDraft(lessonId, { title: "", instructions: "", fileName: "", file: null, error: "" });
+      setCourse((prev) => ({
+        ...prev,
+        lessons: prev.lessons.map((l) => (l.id === lessonId ? { ...l, task: null } : l)),
+      }));
+    } catch (error) {
+      updateTaskDraft(lessonId, {
+        error: error instanceof ApiError ? error.message : "Couldn't remove this task.",
+      });
+    }
+  };
+
+  const viewLessonTaskPdf = async (lessonId) => {
+    try {
+      const { task } = await courseApi.getLessonTask(courseId, lessonId);
+      if (task?.fileData) openBase64Pdf(task.fileName, task.fileData);
+    } catch {
+      updateTaskDraft(lessonId, { error: "Couldn't open that PDF." });
+    }
+  };
 
   const handleSave = async () => {
     if (!course) return;
@@ -436,6 +557,12 @@ function ManageCourse() {
         description: course.description,
         thumbnail: course.thumbnail,
         lessons: updatedLessons.map((lesson) => ({
+          // Only a real, previously-saved lesson has a string id. Sending
+          // it back is what lets the backend match this lesson to its
+          // existing row instead of deleting it and creating a new one —
+          // otherwise every save would wipe that lesson's DPP task,
+          // student submissions, and completion progress.
+          id: typeof lesson.id === "string" ? lesson.id : undefined,
           title: lesson.title,
           description: lesson.description,
           videoId: lesson.videoId,
@@ -1204,6 +1331,121 @@ function ManageCourse() {
 
                         </div>
 
+                      )}
+
+                    </div>
+
+
+                    {/* =================================================
+                        LESSON TASK ("DPP") SECTION
+                    ================================================= */}
+
+                    <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+
+                      <div className="flex items-center gap-2">
+                        <ClipboardList size={19} className="text-emerald-400" />
+                        <h3 className="font-semibold text-white">Lesson Task (DPP)</h3>
+                      </div>
+
+                      <p className="mt-1 text-xs text-slate-600">
+                        Assign a task for this lesson — students see it in their Tasks section
+                        right away, complete it whenever they like, and send back a PDF for you
+                        to review. It never blocks them from moving to the next lesson.
+                      </p>
+
+                      {typeof lesson.id !== "string" ? (
+                        <p className="mt-4 rounded-xl border border-dashed border-slate-800 px-4 py-3 text-xs text-slate-500">
+                          Save this lesson first — you can add its task once it's been created.
+                        </p>
+                      ) : (
+                        (() => {
+                          const draft = taskDrafts[lesson.id] || { title: "", instructions: "", fileName: "" };
+                          const hasExisting = !!lesson.task;
+
+                          return (
+                            <div className="mt-4 space-y-3">
+                              <div>
+                                <label className="mb-1.5 block text-xs font-medium text-slate-500">
+                                  Task Title
+                                </label>
+                                <input
+                                  type="text"
+                                  value={draft.title}
+                                  onChange={(e) => updateTaskDraft(lesson.id, { title: e.target.value, error: "" })}
+                                  placeholder="e.g. Basic Mathematics DPP"
+                                  className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-700 focus:border-emerald-500"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="mb-1.5 block text-xs font-medium text-slate-500">
+                                  Instructions (optional)
+                                </label>
+                                <textarea
+                                  rows={2}
+                                  value={draft.instructions}
+                                  onChange={(e) => updateTaskDraft(lesson.id, { instructions: e.target.value, error: "" })}
+                                  placeholder="What should students do for this task?"
+                                  className="w-full resize-none rounded-lg border border-slate-800 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-700 focus:border-emerald-500"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="mb-1.5 block text-xs font-medium text-slate-500">
+                                  Attach the task PDF (optional)
+                                </label>
+                                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-700 bg-slate-900 px-3 py-3 text-sm text-slate-400 transition hover:border-emerald-500/40">
+                                  <UploadCloud size={16} className="shrink-0 text-emerald-400" />
+                                  <span className="min-w-0 flex-1 truncate">
+                                    {draft.file?.name || draft.fileName || "Choose a PDF (e.g. convolution output.pdf)"}
+                                  </span>
+                                  <input
+                                    type="file"
+                                    accept="application/pdf"
+                                    onChange={(e) => handleTaskFileChange(lesson.id, e)}
+                                    className="hidden"
+                                  />
+                                </label>
+                              </div>
+
+                              {draft.error && <p className="text-xs text-red-400">{draft.error}</p>}
+
+                              <div className="flex flex-wrap items-center gap-3 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => saveLessonTask(lesson.id)}
+                                  disabled={draft.saving}
+                                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <Save size={14} />
+                                  {draft.saving ? "Saving…" : hasExisting ? "Update Task" : "Assign Task"}
+                                </button>
+
+                                {hasExisting && lesson.task?.hasFile && (
+                                  <button
+                                    type="button"
+                                    onClick={() => viewLessonTaskPdf(lesson.id)}
+                                    className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300"
+                                  >
+                                    <ExternalLink size={13} />
+                                    View {lesson.task.fileName || "PDF"}
+                                  </button>
+                                )}
+
+                                {hasExisting && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeLessonTask(lesson.id)}
+                                    className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 transition hover:text-red-400"
+                                  >
+                                    <Trash2 size={13} />
+                                    Remove Task
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()
                       )}
 
                     </div>

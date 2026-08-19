@@ -31,6 +31,10 @@ const {
 
   upsertSubmission, getSubmission, getSubmissionById, getSubmissionsForCourseStudent,
   getSubmissionsForCourse, evaluateSubmission,
+
+  upsertLessonTask, getLessonTaskByLesson, getLessonTasksForCourse, deleteLessonTask,
+
+  setLessonCompleted, getLessonCompletionsForCourseStudent,
 } = require("./db");
 const { hashPassword, verifyPassword, sign, verify } = require("./auth");
 
@@ -682,7 +686,23 @@ async function handleOrganizeSummary(req, res) {
    COURSES + LESSONS
 ===================================================== */
 
-function toPublicLesson(lesson) {
+/** Lightweight task summary attached to a lesson — never includes the
+ *  task's PDF bytes (that's fetched on demand via the dedicated task
+ *  endpoint) so course/lesson list payloads stay small. */
+function toPublicTaskSummary(task) {
+  if (!task) return null;
+  return {
+    id: task.id,
+    title: task.title,
+    instructions: task.instructions ?? "",
+    fileName: task.file_name ?? null,
+    hasFile: !!task.file_data,
+    createdAt: task.created_at,
+    updatedAt: task.updated_at,
+  };
+}
+
+function toPublicLesson(lesson, taskByLessonId) {
   return {
     id: lesson.id,
     position: lesson.position,
@@ -690,10 +710,11 @@ function toPublicLesson(lesson) {
     description: lesson.description ?? "",
     videoId: lesson.video_id ?? "",
     duration: lesson.duration ?? "",
+    task: taskByLessonId ? toPublicTaskSummary(taskByLessonId.get(lesson.id) || null) : null,
   };
 }
 
-function toPublicCourse(course, lessons, extra = {}) {
+function toPublicCourse(course, lessons, extra = {}, taskByLessonId = null) {
   return {
     id: course.id,
     teacherId: course.teacher_id,
@@ -704,9 +725,15 @@ function toPublicCourse(course, lessons, extra = {}) {
     thumbnail: course.thumbnail ?? "",
     instructor: course.instructor ?? "StudySphere Teacher",
     createdAt: course.created_at,
-    lessons: lessons.map(toPublicLesson),
+    lessons: lessons.map((lesson) => toPublicLesson(lesson, taskByLessonId)),
     ...extra,
   };
+}
+
+/** Builds a Map(lessonId -> task row) for every lesson task on a course,
+ *  so per-lesson task summaries can be attached without an N+1 query. */
+function taskMapForCourse(courseId) {
+  return new Map(getLessonTasksForCourse(courseId).map((t) => [t.lesson_id, t]));
 }
 
 function validateLessonsInput(rawLessons) {
@@ -721,12 +748,17 @@ function validateLessonsInput(rawLessons) {
     const videoId = typeof raw.videoId === "string" ? raw.videoId.trim() : "";
     const duration = typeof raw.duration === "string" ? raw.duration.trim().slice(0, 40) : "";
     const description = typeof raw.description === "string" ? raw.description.trim().slice(0, 2000) : "";
+    // Preserve a real, already-saved lesson id when the client sends one back
+    // (e.g. editing an existing course) so the lesson's task/submissions/
+    // completions stay attached instead of being dropped on every save.
+    // A brand-new lesson the teacher just added client-side won't have one.
+    const id = typeof raw.id === "string" && raw.id.length > 0 ? raw.id : undefined;
 
     if (!title || !videoId || !duration) {
       return { error: `Lesson ${i + 1} needs a title, a valid video, and a duration.` };
     }
 
-    lessons.push({ id: crypto.randomUUID(), title, description, videoId, duration });
+    lessons.push({ id, title, description, videoId, duration });
   }
 
   return { lessons };
@@ -765,7 +797,7 @@ async function handleCreateCourse(req, res) {
   const course = getCourseById(id);
   const savedLessons = getLessonsForCourse(id);
 
-  return sendJson(res, 201, { course: toPublicCourse(course, savedLessons, { enrolledCount: 0 }) });
+  return sendJson(res, 201, { course: toPublicCourse(course, savedLessons, { enrolledCount: 0 }, taskMapForCourse(id)) });
 }
 
 async function handleUpdateCourse(req, res, params) {
@@ -795,14 +827,14 @@ async function handleUpdateCourse(req, res, params) {
   const course = getCourseById(params.id);
   const lessons = getLessonsForCourse(params.id);
   return sendJson(res, 200, {
-    course: toPublicCourse(course, lessons, { enrolledCount: getEnrollmentCountForCourse(params.id) }),
+    course: toPublicCourse(course, lessons, { enrolledCount: getEnrollmentCountForCourse(params.id) }, taskMapForCourse(params.id)),
   });
 }
 
 async function handleListCourses(req, res) {
   const courses = getAllCourses().map((course) => {
     const lessons = getLessonsForCourse(course.id);
-    return toPublicCourse(course, lessons, { enrolledCount: getEnrollmentCountForCourse(course.id) });
+    return toPublicCourse(course, lessons, { enrolledCount: getEnrollmentCountForCourse(course.id) }, taskMapForCourse(course.id));
   });
   return sendJson(res, 200, { courses });
 }
@@ -819,7 +851,7 @@ async function handleGetCourse(req, res, params) {
     extra.enrolled = !!getEnrollment(course.id, currentUser.id);
   }
 
-  return sendJson(res, 200, { course: toPublicCourse(course, lessons, extra) });
+  return sendJson(res, 200, { course: toPublicCourse(course, lessons, extra, taskMapForCourse(course.id)) });
 }
 
 async function handleDeleteCourse(req, res, params) {
@@ -835,7 +867,7 @@ async function handleDeleteCourse(req, res, params) {
 async function handleTeacherCourses(req, res) {
   const courses = getCoursesByTeacher(req.user.id).map((course) => {
     const lessons = getLessonsForCourse(course.id);
-    return toPublicCourse(course, lessons, { enrolledCount: getEnrollmentCountForCourse(course.id) });
+    return toPublicCourse(course, lessons, { enrolledCount: getEnrollmentCountForCourse(course.id) }, taskMapForCourse(course.id));
   });
   return sendJson(res, 200, { courses });
 }
@@ -855,28 +887,43 @@ async function handleEnroll(req, res, params) {
   return sendJson(res, 201, { message: "Enrolled.", enrolledCount: getEnrollmentCountForCourse(course.id) });
 }
 
-/** Builds the per-lesson status (locked / pending / submitted / approved /
- *  rejected) + remark for one student on one course. A lesson unlocks once
- *  the previous lesson's task submission has been approved by the teacher. */
-function buildLessonProgress(lessons, submissions) {
+/** Builds the per-lesson status (pending / submitted / approved / rejected)
+ *  + remark for one student on one course, plus whether they've marked
+ *  that lesson complete. Nothing here locks a lesson anymore — a task's
+ *  review status is purely feedback, never a gate on moving forward. */
+function buildLessonProgress(lessons, submissions, completions) {
   const byLessonId = new Map(submissions.map((s) => [s.lesson_id, s]));
-  let previousApproved = true;
+  const completedLessonIds = new Set((completions || []).map((c) => c.lesson_id));
 
   return lessons.map((lesson) => {
     const submission = byLessonId.get(lesson.id) || null;
-    const locked = !previousApproved;
-    previousApproved = submission?.status === "approved";
 
     return {
       lessonId: lesson.id,
-      locked,
-      status: locked ? "locked" : submission ? submission.status : "pending",
+      locked: false,
+      completed: completedLessonIds.has(lesson.id),
+      status: submission ? submission.status : "pending",
       remark: submission?.remark ?? null,
       fileName: submission?.file_name ?? null,
       submittedAt: submission?.submitted_at ?? null,
       evaluatedAt: submission?.evaluated_at ?? null,
     };
   });
+}
+
+/** Course progress % is purely: how many of this course's current lessons
+ *  has the student marked complete, out of how many lessons exist right
+ *  now. Both numbers are read fresh every time, so the bar (and the
+ *  fraction) automatically move when a teacher adds/removes a lesson. */
+function computeProgressPct(lessons, completions) {
+  if (!lessons.length) return 0;
+  const completedLessonIds = new Set((completions || []).map((c) => c.lesson_id));
+  const validLessonIds = new Set(lessons.map((l) => l.id));
+  let completedCount = 0;
+  for (const id of completedLessonIds) {
+    if (validLessonIds.has(id)) completedCount += 1;
+  }
+  return Math.round((completedCount / lessons.length) * 100);
 }
 
 async function handleStudentCourses(req, res) {
@@ -887,14 +934,14 @@ async function handleStudentCourses(req, res) {
     if (!course) return null;
     const lessons = getLessonsForCourse(course.id);
     const submissions = getSubmissionsForCourseStudent(course.id, req.user.id);
-    const progress = buildLessonProgress(lessons, submissions);
-    const approvedCount = progress.filter((p) => p.status === "approved").length;
+    const completions = getLessonCompletionsForCourseStudent(course.id, req.user.id);
+    const progress = buildLessonProgress(lessons, submissions, completions);
 
     return toPublicCourse(course, lessons, {
       enrolledAt: enrollment.enrolled_at,
-      progressPct: lessons.length ? Math.round((approvedCount / lessons.length) * 100) : 0,
+      progressPct: computeProgressPct(lessons, completions),
       lessonProgress: progress,
-    });
+    }, taskMapForCourse(course.id));
   }).filter(Boolean);
 
   return sendJson(res, 200, { courses });
@@ -909,16 +956,166 @@ async function handleStudentCourseDetail(req, res, params) {
 
   const lessons = getLessonsForCourse(course.id);
   const submissions = getSubmissionsForCourseStudent(course.id, req.user.id);
-  const progress = buildLessonProgress(lessons, submissions);
-  const approvedCount = progress.filter((p) => p.status === "approved").length;
+  const completions = getLessonCompletionsForCourseStudent(course.id, req.user.id);
+  const progress = buildLessonProgress(lessons, submissions, completions);
 
   return sendJson(res, 200, {
     course: toPublicCourse(course, lessons, {
       enrolledAt: enrollment.enrolled_at,
-      progressPct: lessons.length ? Math.round((approvedCount / lessons.length) * 100) : 0,
+      progressPct: computeProgressPct(lessons, completions),
       lessonProgress: progress,
-    }),
+    }, taskMapForCourse(course.id)),
   });
+}
+
+async function handleCompleteLesson(req, res, params) {
+  const course = getCourseById(params.id);
+  if (!course) return sendJson(res, 404, { message: "Course not found." });
+
+  if (!getEnrollment(course.id, req.user.id)) {
+    return sendJson(res, 403, { message: "You're not enrolled in this course." });
+  }
+
+  const lesson = getLessonById(params.lessonId, course.id);
+  if (!lesson) return sendJson(res, 404, { message: "Lesson not found." });
+
+  const body = await readBody(req);
+  const completed = body.completed !== false; // default true
+
+  setLessonCompleted(lesson.id, course.id, req.user.id, completed);
+
+  const lessons = getLessonsForCourse(course.id);
+  const completions = getLessonCompletionsForCourseStudent(course.id, req.user.id);
+
+  return sendJson(res, 200, {
+    completed,
+    progressPct: computeProgressPct(lessons, completions),
+  });
+}
+
+/* =====================================================
+   LESSON TASKS ("DPPs") — teacher-authored, per lesson
+===================================================== */
+
+async function handleSaveLessonTask(req, res, params) {
+  const course = getCourseById(params.id);
+  if (!course || course.teacher_id !== req.user.id) {
+    return sendJson(res, 404, { message: "Course not found." });
+  }
+
+  const lesson = getLessonById(params.lessonId, course.id);
+  if (!lesson) return sendJson(res, 404, { message: "Lesson not found." });
+
+  const body = await readBody(req, MAX_UPLOAD_BODY_BYTES);
+  const title = typeof body.title === "string" ? body.title.trim().slice(0, 160) : "";
+  const instructions = typeof body.instructions === "string" ? body.instructions.trim().slice(0, 4000) : "";
+  const fileName = typeof body.fileName === "string" && body.fileName.trim() ? body.fileName.trim().slice(0, 200) : null;
+  const fileData = typeof body.fileData === "string" && body.fileData ? body.fileData : null;
+
+  if (!title) return sendJson(res, 422, { message: "Task title is required." });
+  if (fileData && fileName && !fileName.toLowerCase().endsWith(".pdf")) {
+    return sendJson(res, 422, { message: "The task attachment must be a PDF." });
+  }
+
+  const task = upsertLessonTask({
+    id: crypto.randomUUID(),
+    lessonId: lesson.id,
+    courseId: course.id,
+    teacherId: req.user.id,
+    title,
+    instructions,
+    fileName,
+    fileData,
+  });
+
+  return sendJson(res, 200, { task: toPublicTaskSummary(task) });
+}
+
+async function handleDeleteLessonTask(req, res, params) {
+  const course = getCourseById(params.id);
+  if (!course || course.teacher_id !== req.user.id) {
+    return sendJson(res, 404, { message: "Course not found." });
+  }
+
+  deleteLessonTask(params.lessonId, course.id, req.user.id);
+  return sendJson(res, 200, { message: "Task removed." });
+}
+
+/** Returns a lesson task WITH its PDF bytes — only to the teacher who
+ *  owns it, or a student enrolled in the course. This is the endpoint
+ *  the "View task PDF" buttons hit, kept separate from the course
+ *  payload so lists of courses/lessons stay lightweight. */
+async function handleGetLessonTask(req, res, params) {
+  const course = getCourseById(params.id);
+  if (!course) return sendJson(res, 404, { message: "Course not found." });
+
+  const currentUser = getCurrentUser(req);
+  const isOwnerTeacher = currentUser?.role === "teacher" && course.teacher_id === currentUser.id;
+  const isEnrolledStudent = currentUser?.role === "student" && !!getEnrollment(course.id, currentUser.id);
+
+  if (!isOwnerTeacher && !isEnrolledStudent) {
+    return sendJson(res, 403, { message: "You don't have access to this course's task." });
+  }
+
+  const task = getLessonTaskByLesson(params.lessonId);
+  if (!task) return sendJson(res, 404, { message: "No task set for this lesson yet." });
+
+  return sendJson(res, 200, {
+    task: {
+      ...toPublicTaskSummary(task),
+      fileData: task.file_data ?? null,
+    },
+  });
+}
+
+/** Every lesson task across every course the student is enrolled in,
+ *  together with their own submission status for it — this is what
+ *  powers the "Tasks" section on the student dashboard. Nothing here
+ *  is gated: a task shows up whether or not the previous lesson was
+ *  reviewed. */
+async function handleStudentTasks(req, res) {
+  const enrollments = getEnrollmentsForStudent(req.user.id);
+  const items = [];
+
+  for (const enrollment of enrollments) {
+    const course = getCourseById(enrollment.course_id);
+    if (!course) continue;
+
+    const lessons = getLessonsForCourse(course.id);
+    const tasksByLesson = taskMapForCourse(course.id);
+    const submissions = getSubmissionsForCourseStudent(course.id, req.user.id);
+    const submissionByLesson = new Map(submissions.map((s) => [s.lesson_id, s]));
+
+    lessons.forEach((lesson, index) => {
+      const task = tasksByLesson.get(lesson.id);
+      if (!task) return;
+
+      const submission = submissionByLesson.get(lesson.id) || null;
+
+      items.push({
+        courseId: course.id,
+        courseTitle: course.title,
+        lessonId: lesson.id,
+        lessonTitle: lesson.title,
+        lessonPosition: index,
+        task: toPublicTaskSummary(task),
+        submissionStatus: submission ? submission.status : "pending",
+        submissionFileName: submission?.file_name ?? null,
+        remark: submission?.remark ?? null,
+      });
+    });
+  }
+
+  // Open tasks (nothing sent yet, or changes were requested) first, most
+  // recently added lesson first — that's what a student most needs to see.
+  items.sort((a, b) => {
+    const openA = a.submissionStatus === "pending" || a.submissionStatus === "rejected";
+    const openB = b.submissionStatus === "pending" || b.submissionStatus === "rejected";
+    if (openA !== openB) return openA ? -1 : 1;
+    return 0;
+  });
+
+  return sendJson(res, 200, { tasks: items });
 }
 
 /* =====================================================
@@ -933,17 +1130,11 @@ async function handleSubmitLessonTask(req, res, params) {
     return sendJson(res, 403, { message: "You're not enrolled in this course." });
   }
 
-  const lessons = getLessonsForCourse(course.id);
   const lesson = getLessonById(params.lessonId, course.id);
   if (!lesson) return sendJson(res, 404, { message: "Lesson not found." });
 
-  const submissions = getSubmissionsForCourseStudent(course.id, req.user.id);
-  const progress = buildLessonProgress(lessons, submissions);
-  const lessonStatus = progress.find((p) => p.lessonId === lesson.id);
-  if (lessonStatus?.locked) {
-    return sendJson(res, 403, { message: "Complete the previous lesson's task first." });
-  }
-
+  // Submitting a task is never gated on other lessons — a student can
+  // send their work for any lesson in the course at any time.
   const body = await readBody(req, MAX_UPLOAD_BODY_BYTES);
   const fileName = typeof body.fileName === "string" && body.fileName.trim() ? body.fileName.trim().slice(0, 200) : "submission.pdf";
   const fileData = typeof body.fileData === "string" ? body.fileData : "";
@@ -1001,10 +1192,12 @@ async function handleTeacherCourseStudents(req, res, params) {
   const lessons = getLessonsForCourse(course.id);
   const enrollments = getEnrollmentsForCourse(course.id);
   const allSubmissions = getSubmissionsForCourse(course.id);
+  const tasksByLesson = taskMapForCourse(course.id);
 
   const students = enrollments.map((enrollment) => {
     const studentSubmissions = allSubmissions.filter((s) => s.student_id === enrollment.student_id);
-    const progress = buildLessonProgress(lessons, studentSubmissions);
+    const completions = getLessonCompletionsForCourseStudent(course.id, enrollment.student_id);
+    const progress = buildLessonProgress(lessons, studentSubmissions, completions);
 
     return {
       enrollmentId: enrollment.id,
@@ -1012,15 +1205,17 @@ async function handleTeacherCourseStudents(req, res, params) {
       studentName: enrollment.student_name,
       studentEmail: enrollment.student_email,
       enrolledAt: enrollment.enrolled_at,
+      progressPct: computeProgressPct(lessons, completions),
       lessons: lessons.map((lesson, index) => {
         const p = progress[index];
         const submission = studentSubmissions.find((s) => s.lesson_id === lesson.id) || null;
         return {
           lessonId: lesson.id,
           lessonTitle: lesson.title,
-          locked: p.locked,
+          completed: p.completed,
           status: p.status,
           remark: p.remark,
+          hasTask: !!tasksByLesson.get(lesson.id),
           submissionId: submission?.id ?? null,
           fileName: submission?.file_name ?? null,
           fileData: submission?.file_data ?? null,
@@ -1030,7 +1225,7 @@ async function handleTeacherCourseStudents(req, res, params) {
     };
   });
 
-  return sendJson(res, 200, { course: toPublicCourse(course, lessons), students });
+  return sendJson(res, 200, { course: toPublicCourse(course, lessons, {}, taskMapForCourse(course.id)), students });
 }
 
 async function handleEvaluateSubmission(req, res, params) {
@@ -1088,6 +1283,11 @@ const routes = [
   { method: "DELETE", path: "/api/courses/:id", handler: requireRole("teacher", handleDeleteCourse) },
   { method: "POST", path: "/api/courses/:id/enroll", handler: requireRole("student", handleEnroll) },
   { method: "POST", path: "/api/courses/:id/lessons/:lessonId/submit", handler: requireRole("student", handleSubmitLessonTask) },
+  { method: "POST", path: "/api/courses/:id/lessons/:lessonId/complete", handler: requireRole("student", handleCompleteLesson) },
+
+  { method: "PUT", path: "/api/courses/:id/lessons/:lessonId/task", handler: requireRole("teacher", handleSaveLessonTask) },
+  { method: "DELETE", path: "/api/courses/:id/lessons/:lessonId/task", handler: requireRole("teacher", handleDeleteLessonTask) },
+  { method: "GET", path: "/api/courses/:id/lessons/:lessonId/task", handler: handleGetLessonTask },
 
   { method: "GET", path: "/api/teacher/courses", handler: requireRole("teacher", handleTeacherCourses) },
   { method: "GET", path: "/api/teacher/students", handler: requireRole("teacher", handleTeacherStudents) },
@@ -1096,6 +1296,7 @@ const routes = [
 
   { method: "GET", path: "/api/student/courses", handler: requireRole("student", handleStudentCourses) },
   { method: "GET", path: "/api/student/courses/:id", handler: requireRole("student", handleStudentCourseDetail) },
+  { method: "GET", path: "/api/student/tasks", handler: requireRole("student", handleStudentTasks) },
 ];
 
 function matchRoute(method, pathname) {

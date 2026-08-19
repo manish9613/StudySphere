@@ -464,6 +464,16 @@ function StudentCourses() {
           )}`}
         >
 
+          {/* Uploaded thumbnail, if the teacher set one */}
+
+          {course.thumbnail && (
+            <img
+              src={course.thumbnail}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          )}
+
           {/* Decorative glow */}
 
           <div className="absolute -left-10 -top-10 h-32 w-32 rounded-full bg-blue-500/10 blur-3xl" />
